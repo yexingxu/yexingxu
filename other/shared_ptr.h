@@ -137,24 +137,24 @@ void swap(util::SharedPtr<T> &left, util::SharedPtr<T> &right) {
   left.swap(right);
 }
 
-template <typename T, typename... Args>
-SharedPtr<T> make_shared(Args &&...args) {
-  char *ptr = static_cast<char *>(operator new(sizeof(T) *
-                                               sizeof(impl::SharedPtrImpl<T>)));
-  if (ptr == nullptr) {
-    throw std::bad_alloc();
-  }
+// template <typename T, typename... Args>
+// SharedPtr<T> make_shared(Args &&...args) {
+//   char *ptr = static_cast<char *>(operator new(sizeof(T) *
+//                                                sizeof(impl::SharedPtrImpl<T>)));
+//   if (ptr == nullptr) {
+//     throw std::bad_alloc();
+//   }
 
-  auto t_ptr = reinterpret_cast<T *>(ptr + sizeof(impl::SharedPtrImpl<T>));
+//   auto t_ptr = reinterpret_cast<T *>(ptr + sizeof(impl::SharedPtrImpl<T>));
 
-  try {
-    auto impl = new (ptr) impl::SharedPtrImpl<T>(
-        t_ptr, impl::DestructorDeleter(), std::forward<T>(args)...);
-    return SharedPtr<T>(impl);
-  } catch (...) {
-    operator delete(ptr);
-    throw;
-  }
-}
+//   try {
+//     auto impl = new (ptr) impl::SharedPtrImpl<T>(
+//         t_ptr, impl::DestructorDeleter(), std::forward<T>(args)...);
+//     return SharedPtr<T>(impl);
+//   } catch (...) {
+//     operator delete(ptr);
+//     throw;
+//   }
+// }
 
 }  // namespace util

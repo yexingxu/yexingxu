@@ -21,11 +21,14 @@ find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
 check_and_add_files(TEST_SOURCES
-  "src/"
+ "./"
   test.cc
 )
-
-add_executable(test ${TEST_SOURCES})
+check_and_add_files(TEMPLATE_TEST_SOURCES
+ "template/"
+  type_id_test.cc
+)
+add_executable(test ${TEST_SOURCES} ${TEMPLATE_TEST_SOURCES})
 
 set_target_properties(test
   PROPERTIES
@@ -37,14 +40,15 @@ set_target_properties(test
 
 target_compile_options(test
   PRIVATE
-    -Wall -Wextra -pedantic -Wshadow -Wswitch-default
-    # -Weffc++ -Werror
+    -Wall -Wextra -Wshadow -Wswitch-default
+    # -Weffc++ -Werror  -pedantic
     $<$<CONFIG:Debug>:-Wsign-conversion -ggdb>
 )
 
 target_include_directories(test
  PRIVATE
   ${CMAKE_SOURCE_DIR}/other
+  ${CMAKE_SOURCE_DIR}/template
 )
 
 target_link_libraries(test

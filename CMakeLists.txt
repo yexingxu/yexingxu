@@ -6,3 +6,4 @@ project(cpp)
 
 # add_subdirectory(other)
 add_subdirectory(test)
+add_subdirectory(template)
