@@ -4,11 +4,12 @@
  * @Author: chen, hua
  * @Date: 2023-11-29 11:04:08
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-11-29 11:04:12
+ * @LastEditTime: 2023-12-08 12:12:09
  */
 #pragma once
 #include <algorithm>
 struct size_info {
+  // size_info() : total(0), size_cnt(0), max_size(0) {}
   std::size_t total;
   std::size_t size_cnt;
   std::size_t max_size;

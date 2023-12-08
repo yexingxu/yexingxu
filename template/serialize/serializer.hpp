@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-28 15:37:17
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-11-29 02:36:39
+ * @LastEditTime: 2023-12-08 15:53:04
  */
 
 #include <array>
@@ -12,54 +12,15 @@
 #include <type_traits>
 #include <utility>
 
+#include "calculate_size.hpp"
 #include "endian_wapper.hpp"
+#include "if_constexpr.hpp"
 #include "type_calculate.hpp"
 #include "type_id.hpp"
-
 #ifndef SERIALIZE_DETAILS_SERIALIZE_HPP_
 #define SERIALIZE_DETAILS_SERIALIZE_HPP_
 namespace serialize {
 namespace details {
-
-struct serialize_buffer_size {
- private:
-  std::size_t len_;
-  unsigned char metainfo_;
-
- public:
-  constexpr serialize_buffer_size() : len_(0), metainfo_(0) {}
-  constexpr std::size_t size() const { return len_; }
-  constexpr unsigned char metainfo() const { return metainfo_; }
-  constexpr operator std::size_t() const { return len_; }
-
-  //   template <uint64_t conf, typename... Args>
-  //   friend STRUCT_PACK_INLINE constexpr serialize_buffer_size
-  //   struct_pack::detail::get_serialize_runtime_info(const Args&... args);
-};
-
-template <typename T, typename = void>
-struct writer_t_impl : std::false_type {};
-
-template <typename T>
-struct writer_t_impl<T, std::void_t<decltype(std::declval<T>().write(
-                            (const char *)nullptr, std::size_t{}))>>
-    : std::true_type {};
-
-template <typename T>
-constexpr bool writer_t = writer_t_impl<T>::value;
-
-template <typename T, typename = void>
-struct reader_t_impl : std::false_type {};
-
-template <typename T>
-struct reader_t_impl<
-    T, std::void_t<decltype(std::declval<T>().read((char *)nullptr,
-                                                   std::size_t{})),
-                   decltype(std::declval<T>().ignore(std::size_t{})),
-                   decltype(std::declval<T>().tellg())>> : std::true_type {};
-
-template <typename T>
-constexpr bool reader_t = reader_t_impl<T>::value;
 
 template <typename writer, typename serialize_type>
 class Serializer {
@@ -84,6 +45,85 @@ class Serializer {
         (serialize_many<size_type, compatible_version_number<Type>[I]>(t,
                                                                        args...),
          0)...});
+  }
+  template <uint64_t conf, std::size_t size_type, typename T, typename... Args>
+  inline void serialize(const T &t, const Args &...args) {
+    serialize_metainfo<conf, size_type == 1, T, Args...>();
+    serialize_many<size_type, UINT64_MAX>(t, args...);
+    // using Type = get_args_type<T, Args...>;
+    // utils::if_<serialize_static_config<Type>::has_compatible>([&]() {
+    //   constexpr std::size_t sz = compatible_version_number<Type>.size();
+    //   return serialize_expand_compatible_helper<size_type, T, Args...>(
+    //       t, std::make_index_sequence<sz>{}, args...);
+    // });
+  }
+
+ private:
+  template <typename T, typename... Args,
+            std::enable_if_t<sizeof...(Args) == 0, int> = 0>
+  static constexpr uint32_t inline calculate_raw_hash() {
+    return get_types_code<remove_cvref_t<T>>();
+  }
+  template <typename T, typename... Args,
+            std::enable_if_t<sizeof...(Args) != 0, int> = 0>
+  static constexpr uint32_t calculate_raw_hash() {
+    return get_types_code<
+        std::tuple<remove_cvref_t<T>, remove_cvref_t<Args>...>>();
+  }
+
+  template <uint64_t conf, typename T, typename... Args,
+            std::enable_if_t<check_has_metainfo<conf, T>(), int> = 0>
+  static constexpr uint32_t inline calculate_hash_head() {
+    constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
+    return raw_types_code + 1;
+  }
+  template <uint64_t conf, typename T, typename... Args,
+            std::enable_if_t<!check_has_metainfo<conf, T>(), int> = 0>
+  static constexpr uint32_t inline calculate_hash_head() {
+    constexpr uint32_t raw_types_code = calculate_raw_hash<T, Args...>();
+    return raw_types_code;
+  }
+
+  template <uint64_t conf, bool is_default_size_type, typename T,
+            typename... Args>
+  constexpr void inline serialize_metainfo() {
+    constexpr auto hash_head = calculate_hash_head<conf, T, Args...>() |
+                               (is_default_size_type ? 0 : 1);
+    // if constexpr (!check_if_disable_hash_head<conf, serialize_type>()) {
+    //   write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
+    // }
+    // if constexpr (hash_head % 2) {  // has more metainfo
+    //   auto metainfo = info.metainfo();
+    //   write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
+    //   if constexpr (serialize_static_config<serialize_type>::has_compatible)
+    //   {
+    //     uint16_t len16;
+    //     uint32_t len32;
+    //     uint64_t len64;
+    //     switch (metainfo & 0b11) {
+    //       case 1:
+    //         len16 = info.size();
+    //         write_wrapper<2>(writer_, (char *)&len16);
+    //         break;
+    //       case 2:
+    //         len32 = info.size();
+    //         write_wrapper<4>(writer_, (char *)&len32);
+    //         break;
+    //       case 3:
+    //         len64 = info.size();
+    //         write_wrapper<8>(writer_, (char *)&len64);
+    //         break;
+    //       default:
+    //         unreachable();
+    //     }
+    //   }
+    //   if constexpr (check_if_add_type_literal<conf, serialize_type>()) {
+    //     constexpr auto type_literal =
+    //         struct_pack::get_type_literal<T, Args...>();
+    //     write_bytes_array(writer_, type_literal.data(),
+    //                       type_literal.size() + 1);
+    //   }
+    // }
   }
 
  private:
@@ -173,6 +213,31 @@ class Serializer {
   writer &writer_;
   const serialize_buffer_size &info_;
 };
+
+template <uint64_t conf = sp_config::DEFAULT, typename Writer, typename... Args>
+void serialize_to(Writer &writer, const serialize_buffer_size &info,
+                  const Args &...args) {
+  static_assert(sizeof...(args) > 0, "");
+  details::Serializer<Writer, details::get_args_type<Args...>> o(writer, info);
+  switch ((info.metainfo() & 0b11000) >> 3) {
+    case 0:
+      o.template serialize<conf, 1>(args...);
+      break;
+    case 1:
+      o.template serialize<conf, 2>(args...);
+      break;
+    case 2:
+      o.template serialize<conf, 4>(args...);
+      break;
+    case 3:
+      o.template serialize<conf, 8>(args...);
+      break;
+    default:
+      details::unreachable();
+      break;
+  };
+}
+
 }  // namespace details
 }  // namespace serialize
 

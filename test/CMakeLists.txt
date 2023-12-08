@@ -27,6 +27,7 @@ check_and_add_files(TEST_SOURCES
 check_and_add_files(TEMPLATE_TEST_SOURCES
  "template/"
   type_id_test.cc
+  type_calculate_test.cc
 )
 add_executable(test ${TEST_SOURCES} ${TEMPLATE_TEST_SOURCES})
 

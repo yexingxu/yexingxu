@@ -54,7 +54,7 @@ template <bool result, typename CaseT>
 struct case_constexpr {
   static constexpr bool value = result;
   CaseT case_;
-  constexpr explicit case_constexpr(CaseT &&case_) : case_{std::move(case_)} {}
+  constexpr explicit case_constexpr(CaseT &&ca_) : case_{std::move(ca_)} {}
   constexpr auto operator()() { return case_(); }
 };
 }  // namespace detail

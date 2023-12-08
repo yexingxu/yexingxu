@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-28 16:16:07
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-11-29 01:26:39
+ * @LastEditTime: 2023-12-07 23:05:12
  */
 
 #include <climits>
@@ -55,6 +55,7 @@ enum class type_id {
   map_container_t,
   set_container_t,
   container_t,
+  tuple_t,
   optional_t,
   variant_t,
   expected_t,
@@ -158,7 +159,7 @@ template <typename T, std::enable_if_t<std::is_same<char32_t, T>::value &&
 constexpr type_id get_integral_type() {
   static_assert(sizeof(char32_t) == 4,
                 "sizeof(char32_t) != 4, which is not supported.");
-  return type_id::char_16_t;
+  return type_id::char_32_t;
 }
 
 template <
@@ -193,7 +194,25 @@ constexpr type_id get_floating_point_type() {
   static_assert(!sizeof(T),
                 "The float type in this machine is not standard IEEE 754 "
                 "32bits float point!");
+  return type_id::type_end_flag;
+}
+
+template <typename T,
+          std::enable_if_t<std::is_same<float, T>::value &&
+                               !(!std::numeric_limits<float>::is_iec559 ||
+                                 sizeof(float) != 4),
+                           int> = 0>
+constexpr type_id get_floating_point_type() {
   return type_id::float32_t;
+}
+
+template <typename T,
+          std::enable_if_t<std::is_same<double, T>::value &&
+                               !(!std::numeric_limits<double>::is_iec559 ||
+                                 sizeof(double) != 8),
+                           int> = 0>
+constexpr type_id get_floating_point_type() {
+  return type_id::float64_t;
 }
 
 template <typename T,
@@ -205,7 +224,16 @@ constexpr type_id get_floating_point_type() {
   static_assert(!sizeof(T),
                 "The double type in this machine is not standard IEEE 754 "
                 "64bits float point!");
-  return type_id::float64_t;
+  return type_id::type_end_flag;
+}
+
+template <typename T,
+          std::enable_if_t<std::is_same<long double, T>::value &&
+                               !(!std::numeric_limits<long double>::is_iec559 ||
+                                 sizeof(long double) != 16),
+                           int> = 0>
+constexpr type_id get_floating_point_type() {
+  return type_id::float128_t;
 }
 
 template <typename T,
@@ -217,11 +245,12 @@ constexpr type_id get_floating_point_type() {
   static_assert(!sizeof(T),
                 "The long double type in this machine is not standard IEEE 754 "
                 "128bits float point!");
-  return type_id::float128_t;
+  return type_id::type_end_flag;
 }
 
 // TODO Optional if constexpr (optional<T> && is_compatible_v<T>)
-template <typename T, std::enable_if_t<is_compatible_v<T>, int> = 0>
+template <typename T,
+          std::enable_if_t<is_compatible_v<T> && optional<T>, int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
   return type_id::compatible_t;
@@ -291,16 +320,31 @@ constexpr type_id get_type_id() {
   return type_id::map_container_t;
 }
 
-template <typename T, std::enable_if_t<set_container<T>, int> = 0>
+template <typename T,
+          std::enable_if_t<set_container<T> && !map_container<T>, int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
   return type_id::set_container_t;
 }
 
-template <typename T, std::enable_if_t<container<T>, int> = 0>
+template <typename T,
+          std::enable_if_t<container<T> && !string<T> && !map_container<T> &&
+                               !set_container<T> &&
+                               !(array<T> || c_array<T> || static_span<T>),
+                           int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
+  std::cout << "con" << std::endl;
   return type_id::container_t;
+}
+
+template <typename T,
+          std::enable_if_t<tuple<T> && !pair<T> &&
+                               !(array<T> || c_array<T> || static_span<T>),
+                           int> = 0>
+constexpr type_id get_type_id() {
+  static_assert(CHAR_BIT == 8, "");
+  return type_id::tuple_t;
 }
 
 template <typename T, std::enable_if_t<optional<T>, int> = 0>
@@ -346,9 +390,24 @@ constexpr type_id get_type_id() {
   return type_id::expected_t;
 }
 
-template <typename T, std::enable_if_t<is_trivial_tuple<T> || pair<T> ||
-                                           std::is_class<T>::value,
-                                       int> = 0>
+// template <typename T, std::enable_if_t<is_trivial_tuple<T> || pair<T> ||
+//                                            std::is_class<T>::value,
+//                                        int> = 0>
+// constexpr type_id get_type_id() {
+//   static_assert(CHAR_BIT == 8, "");
+//   return type_id::struct_t;
+// }
+
+template <typename T, std::enable_if_t<pair<T>, int> = 0>
+constexpr type_id get_type_id() {
+  static_assert(CHAR_BIT == 8, "");
+  return type_id::struct_t;
+}
+
+template <typename T,
+          std::enable_if_t<std::is_class<T>::value && !container<T> &&
+                               !tuple<T> && !pair<T>,
+                           int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
   return type_id::struct_t;

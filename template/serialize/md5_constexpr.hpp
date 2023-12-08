@@ -4,13 +4,17 @@
  * @Author: chen, hua
  * @Date: 2023-11-29 03:01:46
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-11-29 07:21:47
+ * @LastEditTime: 2023-12-07 15:47:21
  */
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
+
+#ifndef SERIALIZE_DETAILS_MD5_CONSTEXPR_HPP_
+#define SERIALIZE_DETAILS_MD5_CONSTEXPR_HPP_
+
 namespace serialize {
 template <typename CharType, std::size_t Size>
 struct string_literal {
@@ -307,5 +311,6 @@ constexpr uint32_t MD5Hash32Constexpr(const char *string, uint32_t length) {
 }
 
 }  // namespace MD5
-
 }  // namespace serialize
+
+#endif
