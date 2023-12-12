@@ -1,10 +1,13 @@
 
 
+#include <endian.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
+#include "macro.hpp"
 #include "utils.hpp"
 
 #ifndef SERIALIZE_DETAILS_ENDIAN_WAPPER_HPP_
@@ -12,7 +15,11 @@
 namespace serialize {
 namespace details {
 
-static constexpr bool is_system_little_endian = true;
+constexpr bool is_system_little_endian = (__BYTE_ORDER == __LITTLE_ENDIAN);
+
+template <std::size_t block_size>
+constexpr bool is_little_endian_copyable =
+    is_system_little_endian || block_size == 1;
 
 template <typename T>
 T swap_endian(T u) {
@@ -51,7 +58,7 @@ inline uint64_t bswap64(uint64_t raw) {
 };
 
 template <std::size_t block_size, typename writer_t,
-          std::enable_if_t<is_system_little_endian || block_size == 1, int> = 0>
+          std::enable_if_t<block_size == 1, int> = 0>
 void write_wrapper(writer_t& writer, const char* data) {
   writer.write(data, block_size);
 }
@@ -104,59 +111,69 @@ void write_bytes_array(writer_t& writer, const char* data, std::size_t length) {
 }
 
 template <std::size_t block_size, typename reader_t,
+          std::enable_if_t<block_size == 1, int> = 0>
+bool read_wrapper(reader_t& reader, char* data) {
+  return static_cast<bool>(reader.read(data, block_size));
+  return true;
+}
+
+template <std::size_t block_size, typename reader_t,
           std::enable_if_t<block_size == 2, int> = 0>
-bool data_cast(char* data, std::array<char, block_size>& tmp) {
+bool read_wrapper(reader_t& reader, char* data) {
+  std::array<char, block_size> tmp;
+  bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
+  if SER_UNLIKELY (!res) {
+    return res;
+  }
   *(uint16_t*)data = bswap16(*(uint16_t*)&tmp);
   return true;
 }
 
 template <std::size_t block_size, typename reader_t,
           std::enable_if_t<block_size == 4, int> = 0>
-bool data_cast(char* data, std::array<char, block_size>& tmp) {
-  *(uint32_t*)data = bswap32(*(uint32_t*)&tmp);
+bool read_wrapper(reader_t& reader, char* data) {
+  std::array<char, block_size> tmp;
+  bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
+  if SER_UNLIKELY (!res) {
+    return res;
+  }
+  *(uint32_t*)data = bswap16(*(uint32_t*)&tmp);
   return true;
 }
 
 template <std::size_t block_size, typename reader_t,
           std::enable_if_t<block_size == 8, int> = 0>
-bool data_cast(char* data, std::array<char, block_size>& tmp) {
-  *(uint64_t*)data = bswap64(*(uint64_t*)&tmp);
+bool read_wrapper(reader_t& reader, char* data) {
+  std::array<char, block_size> tmp;
+  bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
+  if SER_UNLIKELY (!res) {
+    return res;
+  }
+  *(uint64_t*)data = bswap16(*(uint64_t*)&tmp);
   return true;
 }
 
 template <std::size_t block_size, typename reader_t,
           std::enable_if_t<block_size == 16, int> = 0>
-bool data_cast(char* data, std::array<char, block_size>& tmp) {
+bool read_wrapper(reader_t& reader, char* data) {
+  std::array<char, block_size> tmp;
+  bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
+  if SER_UNLIKELY (!res) {
+    return res;
+  }
   *(uint64_t*)(data + 8) = bswap64(*(uint64_t*)&tmp);
   *(uint64_t*)data = bswap64(*(uint64_t*)(&tmp + 8));
   return true;
 }
 
-template <std::size_t block_size, typename reader_t,
-          std::enable_if_t<!(block_size == 2 || block_size == 4 ||
-                             block_size == 8 || block_size == 16),
-                           int> = 0>
-bool data_cast(char*, std::array<char, block_size>&) {
-  static_assert(true, "illegal block size(should be 1,2,4,8,16)");
-  return false;
-}
-
-template <std::size_t block_size, typename reader_t,
-          std::enable_if_t<is_system_little_endian || block_size == 1, int> = 0>
-bool read_wrapper(reader_t& reader, char* data) {
-  return static_cast<bool>(reader.read(data, block_size));
-}
-
 template <
     std::size_t block_size, typename reader_t,
-    std::enable_if_t<!is_system_little_endian || !(block_size == 1), int> = 0>
-bool read_wrapper(reader_t& reader, char* data) {
-  std::array<char, block_size> tmp;
-  bool res = static_cast<bool>(reader.read((char*)&tmp, block_size));
-  if (!res) {
-    return res;
-  }
-  return data_cast(data, tmp);
+    std::enable_if_t<!(block_size == 1 || block_size == 2 || block_size == 4 ||
+                       block_size == 8 || block_size == 16),
+                     int> = 0>
+bool read_wrapper(reader_t& reader, char*) {
+  static_assert(!sizeof(reader), "illegal block size(should be 1,2,4,8,16)");
+  return false;
 }
 
 template <typename reader_t>

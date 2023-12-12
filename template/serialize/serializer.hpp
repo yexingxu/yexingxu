@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-28 15:37:17
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-08 15:53:04
+ * @LastEditTime: 2023-12-12 17:21:43
  */
 
 #include <array>
@@ -13,7 +13,7 @@
 #include <utility>
 
 #include "calculate_size.hpp"
-#include "endian_wapper.hpp"
+#include "endian_wrapper.hpp"
 #include "if_constexpr.hpp"
 #include "type_calculate.hpp"
 #include "type_id.hpp"
@@ -89,123 +89,100 @@ class Serializer {
   constexpr void inline serialize_metainfo() {
     constexpr auto hash_head = calculate_hash_head<conf, T, Args...>() |
                                (is_default_size_type ? 0 : 1);
-    // if constexpr (!check_if_disable_hash_head<conf, serialize_type>()) {
-    //   write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
-    // }
-    // if constexpr (hash_head % 2) {  // has more metainfo
-    //   auto metainfo = info.metainfo();
-    //   write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
-    //   if constexpr (serialize_static_config<serialize_type>::has_compatible)
-    //   {
-    //     uint16_t len16;
-    //     uint32_t len32;
-    //     uint64_t len64;
-    //     switch (metainfo & 0b11) {
-    //       case 1:
-    //         len16 = info.size();
-    //         write_wrapper<2>(writer_, (char *)&len16);
-    //         break;
-    //       case 2:
-    //         len32 = info.size();
-    //         write_wrapper<4>(writer_, (char *)&len32);
-    //         break;
-    //       case 3:
-    //         len64 = info.size();
-    //         write_wrapper<8>(writer_, (char *)&len64);
-    //         break;
-    //       default:
-    //         unreachable();
-    //     }
-    //   }
-    //   if constexpr (check_if_add_type_literal<conf, serialize_type>()) {
-    //     constexpr auto type_literal =
-    //         struct_pack::get_type_literal<T, Args...>();
-    //     write_bytes_array(writer_, type_literal.data(),
-    //                       type_literal.size() + 1);
-    //   }
-    // }
+
+    if (!check_if_disable_hash_head<conf, serialize_type>()) {
+      write_wrapper<sizeof(uint32_t)>(writer_, (char *)&hash_head);
+    }
+    if (hash_head % 2) {  // has more metainfo
+      auto metainfo = info_.metainfo();
+      write_wrapper<sizeof(char)>(writer_, (char *)&metainfo);
+      if (serialize_static_config<serialize_type>::has_compatible) {
+        uint16_t len16 = 0;
+        uint32_t len32 = 0;
+        uint64_t len64 = 0;
+        switch (metainfo & 0b11) {
+          case 1:
+            len16 = info_.size();
+            write_wrapper<2>(writer_, (char *)&len16);
+            break;
+          case 2:
+            len32 = info_.size();
+            write_wrapper<4>(writer_, (char *)&len32);
+            break;
+          case 3:
+            len64 = info_.size();
+            write_wrapper<8>(writer_, (char *)&len64);
+            break;
+          default:
+            unreachable();
+        }
+      }
+      if (check_if_add_type_literal<conf, serialize_type>()) {
+        constexpr auto type_literal = serialize::get_type_literal<T, Args...>();
+        write_bytes_array(writer_, type_literal.data(),
+                          type_literal.size() + 1);
+      }
+    }
   }
 
  private:
+  template <std::size_t size_type, uint64_t version>
+  constexpr void serialize_many() {}
+
   template <std::size_t size_type, uint64_t version, typename First,
             typename... Args>
   constexpr void serialize_many(const First &first_item, const Args &...items) {
     serialize_one<size_type, version>(first_item);
-    serialize_many<size_type, version>(items...);
+    if (sizeof...(items) > 0) {
+      serialize_many<size_type, version>(items...);
+    }
   }
 
-  template <std::size_t size_type, uint64_t version, typename T,
-            std::enable_if_t<is_trivial_view_v<T>, int> = 0>
-  constexpr void inline serialize_one(const T &item) {
-    using type = remove_cvref_t<decltype(item)>;
-    static_assert(!std::is_pointer<type>::value, "cannot serialzie a pointer");
-    constexpr auto id = get_type_id<type>();
-    return serialize_one<size_type, version>(item.get());
-  }
-
-  template <std::size_t size_type, uint64_t version, typename T,
-            std::enable_if_t<version == UINT64_MAX, int> = 0>
-  constexpr void inline serialize_one(const T &item) {
-    using type = remove_cvref_t<decltype(item)>;
-    static_assert(!std::is_pointer<type>::value, "cannot serialzie a pointer");
-    constexpr auto id = get_type_id<type>();
-    return serialize_one<size_type, version, id, type>(item.get());
-  }
-
-  template <
-      std::size_t size_type, uint64_t version, type_id id, typename Type,
-      typename T,
-      std::enable_if_t<version == UINT64_MAX && (id == type_id::compatible_t ||
-                                                 id == type_id::monostate_t),
-                       int> = 0>
-  constexpr void inline serialize_one(const T &) {
-    // do nothing
-    return;
-  }
-
-  template <
-      std::size_t size_type, uint64_t version, type_id id, typename Type,
-      typename T,
-      std::enable_if_t<
-          version == UINT64_MAX &&
-              (std::is_fundamental<Type>::value || std::is_enum<Type>::value ||
-               id == type_id::int128_t || id == type_id::uint128_t),
-          int> = 0>
-  constexpr void inline serialize_one(const T &item) {
+  template <std::size_t size_type, uint64_t version, type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item,
+      std::enable_if_t<id == type_id::uint128_t || id == type_id::int128_t ||
+                           std::is_fundamental<T>::value ||
+                           std::is_enum<T>::value,
+                       int> = 0) {
     write_wrapper<sizeof(item)>(writer_, (char *)&item);
   }
-
-  template <std::size_t size_type, uint64_t version, type_id id, typename Type,
-            typename T,
-            std::enable_if_t<version == UINT64_MAX && (id == type_id::bitset_t),
-                             int> = 0>
-  constexpr void inline serialize_one(const T &item) {
+  template <std::size_t size_type, uint64_t version, type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item, std::enable_if_t<id == type_id::bitset_t, int> = 0) {
     write_bytes_array(writer_, (char *)&item, sizeof(item));
   }
 
-  template <
-      std::size_t size_type, uint64_t version, type_id id, typename Type,
-      typename T,
-      std::enable_if_t<version == UINT64_MAX && (unique_ptr<Type>), int> = 0>
-  constexpr void inline serialize_one(const T &) {
-    // bool has_value = (item != nullptr);
-    // write_wrapper<sizeof(char)>(writer_, (char *)&has_value);
-    // if (has_value) {
-    //   if constexpr (is_base_class<typename type::element_type>) {
-    //     bool is_ok;
-    //     uint32_t id = item->get_struct_pack_id();
-    //     auto index = search_type_by_md5<typename type::element_type>(
-    //         item->get_struct_pack_id(), is_ok);
-    //     assert(is_ok);
-    //     write_wrapper<sizeof(uint32_t)>(writer_, (char *)&id);
-    //     template_switch<serialize_one_derived_class_helper<
-    //         derived_class_set_t<typename type::element_type>,
-    //         std::integral_constant<std::size_t, size_type>,
-    //         std::integral_constant<std::uint64_t, version>>>(index, this,
-    //                                                          item.get());
-    //   } else {
-    //     serialize_one<size_type, version>(*item);
-    //   }
+  template <std::size_t size_type, uint64_t version, type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item,
+      std::enable_if_t<
+          id == type_id::array_t &&
+              (is_trivial_serializable<remove_cvref_t<decltype(item)>>::value &&
+               is_little_endian_copyable<sizeof(item[0])>),
+          int> = 0) {
+    write_bytes_array(writer_, (char *)&item,
+                      sizeof(remove_cvref_t<decltype(item)>));
+  }
+  template <std::size_t size_type, uint64_t version, type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item,
+      std::enable_if_t<id == type_id::array_t &&
+                           !(is_trivial_serializable<
+                                 remove_cvref_t<decltype(item)>>::value &&
+                             is_little_endian_copyable<sizeof(item[0])>),
+                       int> = 0) {
+    for (const auto &i : item) {
+      serialize_one<size_type, version>(i);
+    }
+  }
+
+  template <std::size_t size_type, uint64_t version, typename T>
+  constexpr void inline serialize_one(const T &item) {
+    using type = remove_cvref_t<decltype(item)>;
+    static_assert(!std::is_pointer<type>::value, "");
+    constexpr auto id = get_type_id<type>();
+    serialize_one_helper<size_type, version, id>(item);
   }
 
   template <typename T>

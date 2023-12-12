@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-28 16:41:13
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-08 15:04:56
+ * @LastEditTime: 2023-12-12 19:19:16
  */
 #include <cstddef>
 #include <cstdint>
@@ -95,6 +95,16 @@ using get_args_type = remove_cvref_t<typename std::conditional<
 namespace details {
 
 template <typename T, typename = void>
+struct deserialize_view_impl : std::false_type {};
+template <typename T>
+struct deserialize_view_impl<T, std::void_t<decltype(std::declval<T>().size()),
+                                            decltype(std::declval<T>().data())>>
+    : std::true_type {};
+
+template <typename Type>
+constexpr bool deserialize_view = deserialize_view_impl<Type>::value;
+
+template <typename T, typename = void>
 struct writer_t_impl : std::false_type {};
 
 template <typename T>
@@ -117,6 +127,28 @@ struct reader_t_impl<
 
 template <typename T>
 constexpr bool reader_t = reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct view_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct view_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().read_view(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool view_reader_t = reader_t<T> &&view_reader_t_impl<T>::value;
+
+template <typename T, typename = void>
+struct seek_reader_t_impl : std::false_type {};
+
+template <typename T>
+struct seek_reader_t_impl<
+    T, std::void_t<decltype(std::declval<T>().seekg(std::size_t{}))>>
+    : std::true_type {};
+
+template <typename T>
+constexpr bool seek_reader_t = reader_t<T> &&seek_reader_t_impl<T>::value;
 
 template <typename T, typename = void>
 struct has_user_defined_id_impl : std::false_type {};
@@ -782,7 +814,8 @@ struct is_trivial_serializable {
 
   template <typename T = Ty,
             std::enable_if_t<std::is_class<T>::value &&
-                                 !(array<T> || map_container<T> || pair<T>),
+                                 !(array<T> || map_container<T> || pair<T> ||
+                                   tuple<T>),
                              int> = 0>
   static constexpr bool solve() {
     using U = decltype(get_types<T>());

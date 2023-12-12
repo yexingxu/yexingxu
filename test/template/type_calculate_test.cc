@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-08 00:23:42
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-08 08:24:12
+ * @LastEditTime: 2023-12-12 14:20:28
  */
 // #include "serialize/type_calculate.hpp"
 
@@ -45,14 +45,18 @@ TEST(SerializerTest, TypeCalculateTest) {
                              decltype(get_types<std::vector<int>>())>::value,
                 "");
 
-  //   static_assert(std::is_same<decltype(get_types<person>()),
-  //                              std::tuple<int, std::string>>::value,
-  //                 "");
-  //   static_assert(
-  //       std::is_same<
-  //           decltype(get_types<nested_object>()),
-  //           std::tuple<int, std::string, person, complicated_object>>::value,
-  //       "");
-
-  //   serialize::get_type_code<std::list<int>>();
+  auto str = serialize::get_type_literal<int>();
+  auto str1 = serialize::get_type_literal<int, int>();
+  auto str2 = serialize::get_type_literal<int, double>();
+  std::cout << str.data() << std::endl;
+  std::cout << str1.data() << std::endl;
+  std::cout << str2.data() << std::endl;
 }
+
+// TEST(SerializerTest, TypeCalculateTest) {
+//   // serialize::string_literal<char, 0> a1;
+//   // serialize::string_literal<char, 1> a2;
+//   // auto a3 = a1 + a2;
+//   //   a1 += a2;
+//   auto str = serialize::get_type_literal<int>();
+// }

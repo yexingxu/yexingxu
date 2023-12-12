@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-29 03:01:46
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-07 15:47:21
+ * @LastEditTime: 2023-12-12 14:17:21
  */
 
 #include <array>
@@ -25,6 +25,21 @@ struct string_literal {
       ar[i] = value[i];
     }
   }
+  // constexpr string_literal(const string_literal &other) = delete;
+  // constexpr string_literal &operator=(const string_literal &other) = delete;
+  // constexpr string_literal(const string_literal &other) {
+  //   for (size_t i = 0; i <= other.size(); ++i) {
+  //     ar[i] = other[i];
+  //   }
+  // }
+  // template <std::size_t Size1, std::size_t Size2>
+  // constexpr string_literal<CharType, Size1 + Size2> &operator=(
+  //     const string_literal<CharType, Size2> &other) {
+  //   for (size_t i = 0; i <= other.size(); ++i) {
+  //     this->ar[i] = other[i];
+  //   }
+  //   return *this;
+  // }
 
   constexpr std::size_t size() const { return Size; }
 
@@ -74,6 +89,34 @@ decltype(auto) constexpr operator+(string_literal<CharType, Len1> str1,
   for (size_t i = 0; i < Len1; ++i) {
     ret[i] = str1[i];
   }
+  for (size_t i = 0; i < Len2; ++i) {
+    ret[i + Len1] = str2[i];
+  }
+  return ret;
+}
+
+// template <typename CharType, size_t Len1, size_t Len2>
+// decltype(auto) constexpr operator=(string_literal<CharType, Len1> str1,
+//                                    string_literal<CharType, Len2> str2) {
+//   string_literal<CharType, Len1 + Len2> ret{};
+//   for (size_t i = 0; i < Len1; ++i) {
+//     ret[i] = str1[i];
+//   }
+//   for (size_t i = 0; i < Len2; ++i) {
+//     ret[i + Len1] = str2[i];
+//   }
+//   return ret;
+// }
+
+template <typename CharType, size_t Len1, size_t Len2>
+constexpr decltype(auto) operator+=(
+    const string_literal<CharType, Len1> &str1,
+    const string_literal<CharType, Len2> &str2) {
+  string_literal<CharType, Len1 + Len2> ret{};
+  for (size_t i = 0; i < Len1; ++i) {
+    ret[i] = str1[i];
+  }
+
   for (size_t i = 0; i < Len2; ++i) {
     ret[i + Len1] = str2[i];
   }
