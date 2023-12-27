@@ -4,6 +4,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 project(cpp)
 
-# add_subdirectory(other)
+
+add_subdirectory(shared_memory)
 add_subdirectory(test)
 add_subdirectory(template)
