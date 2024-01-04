@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-29 02:28:26
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-13 02:27:54
+ * @LastEditTime: 2023-12-28 02:31:41
  */
 
 #ifndef SERIALIZE_CALCULATE_SIZE_HPP_
@@ -33,8 +33,9 @@ template <typename T, typename type = remove_cvref_t<T>,
 constexpr size_info inline calculate_one_size(
     const T &item,
     std::enable_if_t<std::is_fundamental<type>::value ||
-                         std::is_enum<type>::value || id == type_id::int128_t ||
-                         id == type_id::uint128_t || id == type_id::bitset_t,
+                         std::is_enum<type>::value ||
+                         (id == type_id::int128_t || id == type_id::uint128_t ||
+                          id == type_id::bitset_t),
                      int> = 0) {
   size_info info{};
   info.total = sizeof(remove_cvref_t<decltype(item)>);

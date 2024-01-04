@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-11-28 16:41:13
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-12 19:19:16
+ * @LastEditTime: 2023-12-27 22:30:22
  */
 #include <cstddef>
 #include <cstdint>
@@ -301,26 +301,27 @@ static constexpr bool continuous_container =
 
 // map
 template <typename T, typename = void>
-struct map_container_impl : std::false_type {};
+struct has_mapped_type_impl : std::false_type {};
 
 template <typename T>
-struct map_container_impl<T,
-                          std::void_t<typename remove_cvref_t<T>::mapped_type>>
-    : std::true_type {};
+struct has_mapped_type_impl<
+    T, std::void_t<typename remove_cvref_t<T>::mapped_type>> : std::true_type {
+};
 
-template <typename T>
-constexpr bool map_container = container<T> &&map_container_impl<T>::value;
-
-// set
 template <typename T, typename = void>
-struct set_container_impl : std::false_type {};
+struct has_key_type_impl : std::false_type {};
 
 template <typename T>
-struct set_container_impl<T, std::void_t<typename remove_cvref_t<T>::key_type>>
+struct has_key_type_impl<T, std::void_t<typename remove_cvref_t<T>::key_type>>
     : std::true_type {};
 
 template <typename T>
-constexpr bool set_container = container<T> &&set_container_impl<T>::value;
+constexpr bool map_container =
+    container<T> &&has_key_type_impl<T>::value &&has_mapped_type_impl<T>::value;
+// set
+template <typename T>
+constexpr bool set_container = container<T> &&has_key_type_impl<T>::value &&
+                               !has_mapped_type_impl<T>::value;
 
 // bitset
 template <typename T, typename = void>
@@ -456,14 +457,14 @@ struct optional_impl<T, std::void_t<decltype(std::declval<T>().value()),
 template <typename T>
 constexpr bool optional = !expected<T> && optional_impl<T>::value;
 
-template <typename Type>
-constexpr bool is_compatible_v = false;
+// template <typename Type>
+// constexpr bool is_compatible_v = false;
 
-template <typename Type, uint64_t version>
-constexpr bool is_compatible_v<types::compatible<Type, version>> = true;
+// template <typename Type, uint64_t version>
+// constexpr bool is_compatible_v<types::compatible<Type, version>> = true;
 
-template <typename Type>
-constexpr bool is_variant_v = false;
+// template <typename Type>
+// constexpr bool is_variant_v = false;
 
 // template <typename... args>
 // static constexpr bool is_variant_v<std::variant<args...>> = true;
