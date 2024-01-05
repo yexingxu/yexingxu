@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 12:21:29
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 10:08:14
+ * @LastEditTime: 2024-01-05 20:12:02
  */
 #pragma once
 
@@ -14,10 +14,10 @@
 #include <iostream>
 #include <type_traits>
 
+#include "append_types/apply.hpp"
 #include "detail/calculate_size.hpp"
 #include "detail/endian_wrapper.hpp"
 #include "detail/reflection.hpp"
-#include "detail/type_calculate.hpp"
 #include "ser_config.hpp"
 
 namespace serialize {
@@ -56,7 +56,8 @@ class Serializer {
                            std::is_fundamental<T>::value ||
                            std::is_enum<T>::value,
                        int> = 0) {
-    write_wrapper<sizeof(item)>(writer_, (char *)&item);
+    write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                  sizeof(item)>(writer_, (char *)&item);
   }
   template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
@@ -67,20 +68,26 @@ class Serializer {
   template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item,
-      std::enable_if_t<id == type_id::array_t &&
-                           (is_trivial_serializable<T>::value &&
-                            is_little_endian_copyable<sizeof(item[0])>),
-                       int> = 0) {
+      std::enable_if_t<
+          id == type_id::array_t &&
+              (is_trivial_serializable<T>::value &&
+               is_little_endian_copyable<serialize_conf::kByteOrder ==
+                                             byte_order::kLittleEndian,
+                                         sizeof(item[0])>),
+          int> = 0) {
     write_bytes_array(writer_, (char *)&item,
                       sizeof(remove_cvref_t<decltype(item)>));
   }
   template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item,
-      std::enable_if_t<id == type_id::array_t &&
-                           !(is_trivial_serializable<T>::value &&
-                             is_little_endian_copyable<sizeof(item[0])>),
-                       int> = 0) {
+      std::enable_if_t<
+          id == type_id::array_t &&
+              !(is_trivial_serializable<T>::value &&
+                is_little_endian_copyable<serialize_conf::kByteOrder ==
+                                              byte_order::kLittleEndian,
+                                          sizeof(item[0])>),
+          int> = 0) {
     for (const auto &i : item) {
       serialize_one(i);
     }
@@ -95,8 +102,8 @@ class Serializer {
                        serialize_conf::kStringLengthField == 4 ||
                        serialize_conf::kStringLengthField == 8),
                   "");
-    auto size = item.size() + 1;
-    write_wrapper<serialize_conf::kStringLengthField>(writer_, (char *)&size);
+    uint64_t size = item.size() + 1;
+    serialize_length_field<serialize_conf::kStringLengthField>(size);
     using value_type = typename T::value_type;
     write_bytes_array(writer_, (char *)item.data(),
                       item.size() * sizeof(value_type));
@@ -109,7 +116,9 @@ class Serializer {
           (id == type_id::container_t || id == type_id::map_container_t ||
            id == type_id::set_container_t) &&
               (trivially_copyable_container<T> &&
-               is_little_endian_copyable<sizeof(typename T::value_type)>),
+               is_little_endian_copyable<serialize_conf::kByteOrder ==
+                                             byte_order::kLittleEndian,
+                                         sizeof(typename T::value_type)>),
           int> = 0) {
     static_assert((serialize_conf::kArrayLengthField > 0) &&
                       (serialize_conf::kArrayLengthField == 1 ||
@@ -117,8 +126,8 @@ class Serializer {
                        serialize_conf::kArrayLengthField == 4 ||
                        serialize_conf::kArrayLengthField == 8),
                   "");
-    auto size = item.size();
-    write_wrapper<serialize_conf::kArrayLengthField>(writer_, (char *)&size);
+    uint64_t size = item.size();
+    serialize_length_field<serialize_conf::kArrayLengthField>(size);
     using value_type = typename T::value_type;
     write_bytes_array(writer_, (char *)item.data(),
                       item.size() * sizeof(value_type));
@@ -131,7 +140,9 @@ class Serializer {
           (id == type_id::container_t || id == type_id::map_container_t ||
            id == type_id::set_container_t) &&
               !(trivially_copyable_container<T> &&
-                is_little_endian_copyable<sizeof(typename T::value_type)>),
+                is_little_endian_copyable<serialize_conf::kByteOrder ==
+                                              byte_order::kLittleEndian,
+                                          sizeof(typename T::value_type)>),
           int> = 0) {
     static_assert((serialize_conf::kArrayLengthField > 0) &&
                       (serialize_conf::kArrayLengthField == 1 ||
@@ -139,8 +150,8 @@ class Serializer {
                        serialize_conf::kArrayLengthField == 4 ||
                        serialize_conf::kArrayLengthField == 8),
                   "");
-    auto size = item.size();
-    write_wrapper<serialize_conf::kArrayLengthField>(writer_, (char *)&size);
+    uint64_t size = item.size();
+    serialize_length_field<serialize_conf::kArrayLengthField>(size);
     for (const auto &i : item) {
       serialize_one(i);
     }
@@ -155,9 +166,24 @@ class Serializer {
 
   template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
+      const T &item, std::enable_if_t<id == type_id::tuple_t, int> = 0) {
+    tl::apply([&](auto &&...items) { serialize_many(items...); }, item);
+  }
+
+  template <type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item, std::enable_if_t<id == type_id::variant_t, int> = 0) {
+    uint64_t index = item.index();
+    serialize_length_field<serialize_conf::kUnionLengthField>(index);
+    mpark::visit([this](auto &&e) { this->serialize_one(e); }, item);
+  }
+
+  template <type_id id, typename T>
+  constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<id == type_id::optional_t, int> = 0) {
     bool has_value = item.has_value();
-    write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
+    write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                  sizeof(bool)>(writer_, (char *)&has_value);
     if (has_value) {
       serialize_one(*item);
     }
@@ -167,7 +193,8 @@ class Serializer {
   constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<id == type_id::expected_t, int> = 0) {
     bool has_value = item.has_value();
-    write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
+    write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                  sizeof(bool)>(writer_, (char *)&has_value);
     if (has_value) {
       serialize_one(item.value());
     } else {
@@ -177,34 +204,10 @@ class Serializer {
   template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &, std::enable_if_t<id == type_id::monostate_t, int> = 0) {
-    static_assert(std::is_same<typename T::value_type, void>::value,
-                  "serialize void type will do nothing");
     // do nothing
     return;
   }
 
-  template <type_id id, typename T>
-  constexpr void inline serialize_one_helper(
-      const T &,
-      std::enable_if_t<id == type_id::struct_t && !user_defined_refl<T>, int> =
-          0) {
-    static_assert(user_struct<T>,
-                  "serializer only support user defined struct when "
-                  "add macro SERIALIZE_REFL(Type,field1,field2...)");
-    // do nothing
-    return;
-  }
-  // template <type_id id, typename T>
-  // constexpr void inline serialize_one_helper(
-  //     const T &item,
-  //     std::enable_if_t<(id == type_id::struct_t) &&
-  //                          (is_trivial_serializable<T>::value &&
-  //                           is_little_endian_copyable<sizeof(T)>),
-  //                      int> = 0) {
-  //   // TODO padding
-  //   std::cout << sizeof(T) << " --- " << std::endl;
-  //   write_wrapper<sizeof(T)>(writer_, (char *)&item);
-  // }
   // template <type_id id, typename T>
   // constexpr void inline serialize_one_helper(
   //     const T &item, std::enable_if_t<(id == type_id::struct_t), int> = 0) {
@@ -217,12 +220,55 @@ class Serializer {
   // }
   template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
-      const T &item, std::enable_if_t<(id == type_id::struct_t), int> = 0) {
-    if (serialize_conf::kStructLengthField != 0) {
-      auto size = calculate_payload_size<serialize_conf>(item);
-      write_wrapper<serialize_conf::kStructLengthField>(writer_, (char *)&size);
-    }
+      const T &item,
+      std::enable_if_t<(id == type_id::struct_t) &&
+                           serialize_conf::kStructLengthField != 0,
+                       int> = 0) {
+    auto size_info = calculate_payload_size<serialize_conf>(item);
+    uint64_t size = size_info.total + size_info.length_field;
+    serialize_length_field<serialize_conf::kStructLengthField>(size);
     visit_members(item, [this](auto &&...items) { serialize_many(items...); });
+  }
+
+  template <type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item,
+      std::enable_if_t<(id == type_id::struct_t) &&
+                           serialize_conf::kStructLengthField == 0,
+                       int> = 0) {
+    visit_members(item, [this](auto &&...items) { serialize_many(items...); });
+  }
+
+  template <std::uint8_t length_field>
+  constexpr auto inline serialize_length_field(std::uint64_t &size64) {
+    std::uint8_t size8 = 0;
+    std::uint16_t size16 = 0;
+    std::uint32_t size32 = 0;
+    switch (length_field) {
+      case 0:
+        break;
+      case 1:
+        size8 = static_cast<uint8_t>(size64);
+        write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                      1>(writer_, (char *)&size8);
+        break;
+      case 2:
+        size16 = static_cast<uint16_t>(size64);
+        write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                      2>(writer_, (char *)&size16);
+        break;
+      case 4:
+        size32 = static_cast<uint32_t>(size64);
+        write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                      4>(writer_, (char *)&size32);
+        break;
+      case 8:
+        write_wrapper<serialize_conf::kByteOrder == byte_order::kLittleEndian,
+                      8>(writer_, (char *)&size64);
+        break;
+      default:
+        unreachable();
+    }
   }
 
   template <typename T>

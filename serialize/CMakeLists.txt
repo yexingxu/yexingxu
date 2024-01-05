@@ -28,9 +28,9 @@ check_and_add_files(TEMPLATE_TEST_SOURCES
  "test/"
   type_id_test.cc
   calculate_size_test.cc
-  # type_calculate_test.cc
+  endian_test.cc
   serializer_test.cc
-  # deserializer_test.cc
+  deserializer_test.cc
 )
 add_executable(serialize-test ${TEST_SOURCES} ${TEMPLATE_TEST_SOURCES})
 

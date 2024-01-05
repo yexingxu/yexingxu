@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 00:06:13
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 05:25:20
+ * @LastEditTime: 2024-01-05 15:51:47
  */
 
 #pragma once
@@ -39,13 +39,16 @@ enum class length_field_size : std::uint8_t {
   k16 = 16,
 };
 
-struct serialize_props {
-  static constexpr alignment kAlignment = alignment::kAlignment4;
-  static constexpr byte_order kByteOrder = byte_order::kLittleEndian;
-  static constexpr std::uint8_t kStringLengthField = 2u;
-  static constexpr std::uint8_t kArrayLengthField = 4u;
-  static constexpr std::uint8_t kUnionLengthField = 1u;
-  static constexpr std::uint8_t kStructLengthField = 8u;
+struct serialize_props_default {
+  using LengthFieldType = std::uint8_t;
+  using AlignmentType = alignment;
+  using ByteOrderType = byte_order;
+  static constexpr AlignmentType kAlignment = alignment::kAlignment4;
+  static constexpr ByteOrderType kByteOrder = byte_order::kLittleEndian;
+  static constexpr LengthFieldType kStringLengthField = 4u;
+  static constexpr LengthFieldType kArrayLengthField = 4u;
+  static constexpr LengthFieldType kUnionLengthField = 4u;
+  static constexpr LengthFieldType kStructLengthField = 0u;
 };
 
 }  // namespace serialize

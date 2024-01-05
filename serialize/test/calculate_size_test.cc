@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 00:23:40
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 09:21:07
+ * @LastEditTime: 2024-01-05 19:57:51
  */
 
 #include "detail/calculate_size.hpp"
@@ -188,4 +188,9 @@ TEST(SerializerTest, CalculateSizeTest) {
   std::vector<person3> vec_per{p3, p3, p3};
   EXPECT_EQ(detail::get_serialize_runtime_info<serialize_props>(vec_per),
             64 * 3 + 4);
+
+  std::tuple<int, double> tuple_1{1, 2.0};
+  EXPECT_EQ(detail::get_serialize_runtime_info<serialize_props>(tuple_1), 12);
+  mpark::variant<int, double> variant_1{1};
+  EXPECT_EQ(detail::get_serialize_runtime_info<serialize_props>(variant_1), 5);
 }

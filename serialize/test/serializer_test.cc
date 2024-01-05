@@ -5,6 +5,7 @@
 #include <array>
 #include <bitset>
 #include <cstdint>
+#include <fstream>
 #include <list>
 #include <map>
 #include <set>
@@ -21,11 +22,21 @@ TEST(SerializerTest, SerializeTest) {
   // auto buffer_enum = serialize::serialize(color::blue);
 
   person1 p1{1, 1.2, 2};
-  EXPECT_EQ(serialize::serialize(p1).size(), 24);
+  EXPECT_EQ(serialize::serialize<serialize_props>(p1).size(), 24);
   person2 p2{1, 1.2, {1, 2}};
-  EXPECT_EQ(serialize::serialize(p2).size(), 32);
+  EXPECT_EQ(serialize::serialize<serialize_props>(p2).size(), 32);
   person3 p3{{2, 2.2, 2}, {1, 1.2, {1, 2}}};
-  EXPECT_EQ(serialize::serialize(p3).size(), 64);
+  EXPECT_EQ(serialize::serialize<serialize_props>(p3).size(), 64);
+
+  EXPECT_EQ(serialize::serialize(p1).size(), 16);
+  EXPECT_EQ(serialize::serialize(p2).size(), 24);
+  EXPECT_EQ(serialize::serialize(p3).size(), 40);
+
+  std::ofstream writer("struct_pack_demo.data",
+                       std::ofstream::out | std::ofstream::binary);
+  auto rr = serialize::serialize<serialize_props, std::string>(p3);
+  std::string result = "The next line is struct_pack serialize result.\n";
+  serialize::serialize_to<serialize_props>(result, p3);
 
   // std::stringstream ss;
   // std::string str{"hello"};

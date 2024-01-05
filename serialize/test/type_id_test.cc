@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-27 22:51:25
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-28 21:18:36
+ * @LastEditTime: 2024-01-05 19:43:00
  */
 #include "detail/type_id.hpp"
 
@@ -18,6 +18,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "ser_config.hpp"
+#include "user_defined_struct.h"
 
 TEST(SerializerTest, TypeIdTest) {
   EXPECT_EQ(serialize::detail::get_type_id<std::uint8_t>(),
@@ -93,7 +96,7 @@ TEST(SerializerTest, TypeIdTest) {
             serialize::detail::type_id::set_container_t);
   using tuple_t = std::tuple<int, double, int>;
   EXPECT_EQ(serialize::detail::get_type_id<tuple_t>(),
-            serialize::detail::type_id::struct_t);
+            serialize::detail::type_id::tuple_t);
 
   using array_int = std::array<int, 16>;
   EXPECT_EQ(serialize::detail::get_type_id<array_int>(),
@@ -114,4 +117,8 @@ TEST(SerializerTest, TypeIdTest) {
   };
   EXPECT_EQ(serialize::detail::get_type_id<ST>(),
             serialize::detail::type_id::struct_t);
+
+  using variant_t = mpark::variant<int, double, std::string>;
+  EXPECT_EQ(serialize::detail::get_type_id<variant_t>(),
+            serialize::detail::type_id::variant_t);
 }

@@ -31,7 +31,7 @@ enum class type_id {
   char_16_t,
   char_32_t,
   w_char_t,  // Note: this type is not portable!Enable it with marco
-             // STRUCT_PACK_ENABLE_UNPORTABLE_TYPE
+             // SERIALIZE_ENABLE_UNPORTABLE_TYPE
   // fundamental float type
   float16_t,  // TODO: wait for C++23 standard float type
   float32_t,
@@ -268,9 +268,11 @@ constexpr type_id get_type_id() {
   return get_floating_point_type<T>();
 }
 
-template <typename T, std::enable_if_t<std::is_same<void, T>::value ||
-                                           std::is_abstract<T>::value,
-                                       int> = 0>
+template <typename T,
+          std::enable_if_t<std::is_same<void, T>::value ||
+                               std::is_abstract<T>::value ||
+                               std::is_same<mpark::monostate, T>::value,
+                           int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
   return type_id::monostate_t;
@@ -329,11 +331,22 @@ constexpr type_id get_type_id() {
   return type_id::expected_t;
 }
 
-// TODO tuple  会判定为 struct
 template <typename T, std::enable_if_t<user_struct<T>, int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
   return type_id::struct_t;
+}
+
+template <typename T, std::enable_if_t<tuple<T>, int> = 0>
+constexpr type_id get_type_id() {
+  static_assert(CHAR_BIT == 8, "");
+  return type_id::tuple_t;
+}
+
+template <typename T, std::enable_if_t<variant<T>, int> = 0>
+constexpr type_id get_type_id() {
+  static_assert(CHAR_BIT == 8, "");
+  return type_id::variant_t;
 }
 
 template <typename T, std::enable_if_t<pair<T>, int> = 0>
