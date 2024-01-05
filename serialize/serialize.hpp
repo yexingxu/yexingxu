@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-07 14:53:03
  * @LastEditors: chen, hua
- * @LastEditTime: 2023-12-28 23:52:33
+ * @LastEditTime: 2024-01-05 09:23:06
  */
 
 #pragma once
@@ -37,31 +37,29 @@ using unexpected = tl::unexpected<T>;
 
 using unexpect_t = tl::unexpect_t;
 
-template <uint64_t conf = ser_config::DEFAULT, typename Writer,
-          typename... Args, std::enable_if_t<detail::writer_t<Writer>, int> = 0>
+template <typename conf = serialize_props, typename Writer, typename... Args,
+          std::enable_if_t<detail::writer_t<Writer>, int> = 0>
 void serialize_to(Writer &writer, const Args &...args) {
   static_assert(sizeof...(args) > 0, "");
   auto info = detail::get_serialize_runtime_info<conf>(args...);
   detail::serialize_to<conf>(writer, info, args...);
 }
 
-template <uint64_t conf = ser_config::DEFAULT, typename Writer,
-          typename... Args,
+template <typename conf = serialize_props, typename Writer, typename... Args,
           std::enable_if_t<detail::serialize_buffer<Writer>, int> = 0>
 void serialize_to(Writer &writer, const Args &...args) {
   static_assert(sizeof...(args) > 0, "");
 
   auto data_offset = writer.size();
   auto info = detail::get_serialize_runtime_info<conf>(args...);
-  auto total = data_offset + info.size();
+  auto total = data_offset + info;
   writer.resize(total);
   //   detail::resize(writer, total);
   auto real_writer = detail::memory_writer{(char *)writer.data() + data_offset};
   detail::serialize_to<conf>(real_writer, info, args...);
 }
 
-template <uint64_t conf = ser_config::DEFAULT, typename Writer,
-          typename... Args,
+template <typename conf = serialize_props, typename Writer, typename... Args,
           std::enable_if_t<!detail::serialize_buffer<Writer> &&
                                !detail::writer_t<Writer>,
                            int> = 0>
@@ -81,7 +79,7 @@ Buffer serialize(const Args &...args) {
   return buffer;
 }
 
-template <uint64_t conf, typename Buffer = std::vector<char>, typename... Args>
+template <typename conf, typename Buffer = std::vector<char>, typename... Args>
 Buffer serialize(const Args &...args) {
   static_assert(detail::serialize_buffer<Buffer>,
                 "The buffer is not satisfied serialize_buffer requirement!");

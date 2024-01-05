@@ -4,10 +4,11 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 00:08:33
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-04 20:44:12
+ * @LastEditTime: 2024-01-05 10:13:58
  */
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 
@@ -18,12 +19,12 @@
 
 namespace serialize {
 
-struct serialize_buffer_size;
 namespace detail {
 
-template <typename... Args>
+template <typename conf, typename... Args>
 constexpr size_info inline calculate_payload_size(const Args &...items);
 
+template <typename conf>
 struct calculate_one_size {
   template <typename T, typename type = remove_cvref_t<T>,
             type_id id = get_type_id<remove_cvref_t<T>>(),
@@ -44,36 +45,43 @@ struct calculate_one_size {
     return calculate_one_size()(item.get());
   }
 
-  // container
-  template <
-      typename T, typename type = remove_cvref_t<T>,
-      type_id id = get_type_id<remove_cvref_t<T>>(),
-      std::enable_if_t<(id == type_id::container_t || id == type_id::string_t ||
-                        id == type_id::set_container_t ||
-                        id == type_id::map_container_t) &&
-                           trivially_copyable_container<type>,
-                       int> = 0>
+  // string
+  template <typename T, typename type = remove_cvref_t<T>,
+            type_id id = get_type_id<remove_cvref_t<T>>(),
+            std::enable_if_t<id == type_id::string_t, int> = 0>
   constexpr size_info inline operator()(const T &item) {
     size_info ret{};
-    ret.size_cnt += 1;
-    ret.max_size = item.size();
+    ret.length_field += conf::kStringLengthField;
+    ret.total = item.size() + 1;
+    return ret;
+  }
+
+  // container
+  template <typename T, typename type = remove_cvref_t<T>,
+            type_id id = get_type_id<remove_cvref_t<T>>(),
+            std::enable_if_t<(id == type_id::container_t ||
+                              id == type_id::set_container_t ||
+                              id == type_id::map_container_t) &&
+                                 trivially_copyable_container<type>,
+                             int> = 0>
+  constexpr size_info inline operator()(const T &item) {
+    size_info ret{};
+    ret.length_field += conf::kArrayLengthField;
     using value_type = typename type::value_type;
     ret.total = item.size() * sizeof(value_type);
     return ret;
   }
 
-  template <
-      typename T, typename type = remove_cvref_t<T>,
-      type_id id = get_type_id<remove_cvref_t<T>>(),
-      std::enable_if_t<(id == type_id::container_t || id == type_id::string_t ||
-                        id == type_id::set_container_t ||
-                        id == type_id::map_container_t) &&
-                           !trivially_copyable_container<type>,
-                       int> = 0>
+  template <typename T, typename type = remove_cvref_t<T>,
+            type_id id = get_type_id<remove_cvref_t<T>>(),
+            std::enable_if_t<(id == type_id::container_t ||
+                              id == type_id::set_container_t ||
+                              id == type_id::map_container_t) &&
+                                 !trivially_copyable_container<type>,
+                             int> = 0>
   constexpr size_info inline operator()(const T &item) {
     size_info ret{};
-    ret.size_cnt += 1;
-    ret.max_size = item.size();
+    ret.length_field += conf::kArrayLengthField;
     for (auto &&i : item) {
       ret += calculate_one_size()(i);
     }
@@ -121,74 +129,33 @@ struct calculate_one_size {
             std::enable_if_t<id == type_id::struct_t, int> = 0>
   constexpr size_info inline operator()(const T &item) {
     size_info ret{};
+    ret.length_field += conf::kStructLengthField;
     visit_members(item, [&](auto &&...items) {
-      ret += calculate_payload_size(items...);
+      ret += calculate_payload_size<conf>(items...);
     });
     return ret;
   }
 };
 
-template <typename... Args>
+template <typename conf, typename... Args>
 constexpr size_info inline calculate_payload_size(const Args &...items) {
-  size_info info{0, 0, 0};
-  static_cast<void>(
-      std::initializer_list<int>{(info += calculate_one_size()(items), 0)...});
+  size_info info{0, 0};
+  static_cast<void>(std::initializer_list<int>{
+      (info += calculate_one_size<conf>()(items), 0)...});
   return info;
 }
 
-template <uint64_t conf, typename... Args>
-constexpr serialize_buffer_size get_serialize_runtime_info(const Args &...args);
+template <typename conf, typename... Args>
+constexpr std::size_t get_serialize_runtime_info(const Args &...args);
 }  // namespace detail
-
-struct serialize_buffer_size {
-  std::size_t len_;
-  unsigned char metainfo_;
-
-  constexpr serialize_buffer_size() : len_(0), metainfo_(0) {}
-  constexpr std::size_t size() const { return len_; }
-  constexpr unsigned char metainfo() const { return metainfo_; }
-  constexpr operator std::size_t() const { return len_; }
-
-  template <uint64_t conf, typename... Args>
-  friend constexpr serialize_buffer_size detail::get_serialize_runtime_info(
-      const Args &...args);
-};
 
 namespace detail {
 
-template <bool has_container, std::enable_if_t<!has_container, int> = 0>
-constexpr void has_container_helper(serialize_buffer_size &ret,
-                                    size_info &sz_info) {
-  ret.len_ += sz_info.total;
-}
-
-template <bool has_container, std::enable_if_t<has_container, int> = 0>
-constexpr void has_container_helper(serialize_buffer_size &ret,
-                                    size_info &sz_info) {
-  if SER_LIKELY (sz_info.max_size < (uint64_t{1} << 8)) {
-    ret.len_ += sz_info.total + sz_info.size_cnt;
-  } else {
-    if (sz_info.max_size < (uint64_t{1} << 16)) {
-      ret.len_ += sz_info.total + sz_info.size_cnt * 2;
-      ret.metainfo_ = 0b01000;
-    } else if (sz_info.max_size < (uint64_t{1} << 32)) {
-      ret.len_ += sz_info.total + sz_info.size_cnt * 4;
-      ret.metainfo_ = 0b10000;
-    } else {
-      ret.len_ += sz_info.total + sz_info.size_cnt * 8;
-      ret.metainfo_ = 0b11000;
-    }
-  }
-}
-
-template <std::uint64_t conf, typename... Args>
-constexpr serialize_buffer_size get_serialize_runtime_info(
-    const Args &...args) {
-  using Type = get_args_type<Args...>;
-  serialize_buffer_size ret;
-  auto sz_info = calculate_payload_size(args...);
-  constexpr bool has_container = check_if_has_container<Type>();
-  has_container_helper<has_container>(ret, sz_info);
+template <typename conf, typename... Args>
+constexpr std::size_t get_serialize_runtime_info(const Args &...args) {
+  std::size_t ret = 0;
+  auto sz_info = calculate_payload_size<conf>(args...);
+  ret = sz_info.total + sz_info.length_field;
   return ret;
 }
 

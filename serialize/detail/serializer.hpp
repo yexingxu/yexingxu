@@ -4,13 +4,15 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 12:21:29
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-04 20:44:40
+ * @LastEditTime: 2024-01-05 10:08:14
  */
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <iostream>
+#include <type_traits>
 
 #include "detail/calculate_size.hpp"
 #include "detail/endian_wrapper.hpp"
@@ -21,35 +23,33 @@
 namespace serialize {
 namespace detail {
 
-template <typename writer, typename serialize_type>
+template <typename writer, typename serialize_conf>
 class Serializer {
  public:
-  Serializer(writer &w, const serialize_buffer_size &in)
-      : writer_(w), info_(in) {
+  Serializer(writer &w, const std::size_t &in) : writer_(w), info_(in) {
     static_assert(writer_t<writer>,
                   "The writer type must satisfy requirements!");
   }
   Serializer(const Serializer &) = delete;
   Serializer &operator=(const Serializer &) = delete;
 
-  template <std::size_t size_type, typename T, typename... Args>
+  template <typename T, typename... Args>
   inline void serialize(const T &t, const Args &...args) {
-    serialize_many<size_type>(t, args...);
+    serialize_many(t, args...);
   }
 
  private:
-  template <std::size_t size_type>
   constexpr void serialize_many() {}
 
-  template <std::size_t size_type, typename First, typename... Args>
+  template <typename First, typename... Args>
   constexpr void serialize_many(const First &first_item, const Args &...items) {
-    serialize_one<size_type>(first_item);
+    serialize_one(first_item);
     if (sizeof...(items) > 0) {
-      serialize_many<size_type>(items...);
+      serialize_many(items...);
     }
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item,
       std::enable_if_t<id == type_id::uint128_t || id == type_id::int128_t ||
@@ -58,13 +58,13 @@ class Serializer {
                        int> = 0) {
     write_wrapper<sizeof(item)>(writer_, (char *)&item);
   }
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<id == type_id::bitset_t, int> = 0) {
     write_bytes_array(writer_, (char *)&item, sizeof(item));
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item,
       std::enable_if_t<id == type_id::array_t &&
@@ -74,7 +74,7 @@ class Serializer {
     write_bytes_array(writer_, (char *)&item,
                       sizeof(remove_cvref_t<decltype(item)>));
   }
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item,
       std::enable_if_t<id == type_id::array_t &&
@@ -82,71 +82,99 @@ class Serializer {
                              is_little_endian_copyable<sizeof(item[0])>),
                        int> = 0) {
     for (const auto &i : item) {
-      serialize_one<size_type>(i);
+      serialize_one(i);
     }
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
-      const T &item,
-      std::enable_if_t<
-          (id == type_id::container_t || id == type_id::map_container_t ||
-           id == type_id::set_container_t || id == type_id::string_t) &&
-              (trivially_copyable_container<T> &&
-               is_little_endian_copyable<sizeof(typename T::value_type)>),
-          int> = 0) {
-    uint8_t size = item.size();
-    write_wrapper<size_type>(writer_, (char *)&size);
+      const T &item, std::enable_if_t<id == type_id::string_t, int> = 0) {
+    static_assert((serialize_conf::kStringLengthField > 0) &&
+                      (serialize_conf::kStringLengthField == 1 ||
+                       serialize_conf::kStringLengthField == 2 ||
+                       serialize_conf::kStringLengthField == 4 ||
+                       serialize_conf::kStringLengthField == 8),
+                  "");
+    auto size = item.size() + 1;
+    write_wrapper<serialize_conf::kStringLengthField>(writer_, (char *)&size);
     using value_type = typename T::value_type;
     write_bytes_array(writer_, (char *)item.data(),
                       item.size() * sizeof(value_type));
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item,
       std::enable_if_t<
           (id == type_id::container_t || id == type_id::map_container_t ||
-           id == type_id::set_container_t || id == type_id::string_t) &&
+           id == type_id::set_container_t) &&
+              (trivially_copyable_container<T> &&
+               is_little_endian_copyable<sizeof(typename T::value_type)>),
+          int> = 0) {
+    static_assert((serialize_conf::kArrayLengthField > 0) &&
+                      (serialize_conf::kArrayLengthField == 1 ||
+                       serialize_conf::kArrayLengthField == 2 ||
+                       serialize_conf::kArrayLengthField == 4 ||
+                       serialize_conf::kArrayLengthField == 8),
+                  "");
+    auto size = item.size();
+    write_wrapper<serialize_conf::kArrayLengthField>(writer_, (char *)&size);
+    using value_type = typename T::value_type;
+    write_bytes_array(writer_, (char *)item.data(),
+                      item.size() * sizeof(value_type));
+  }
+
+  template <type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item,
+      std::enable_if_t<
+          (id == type_id::container_t || id == type_id::map_container_t ||
+           id == type_id::set_container_t) &&
               !(trivially_copyable_container<T> &&
                 is_little_endian_copyable<sizeof(typename T::value_type)>),
           int> = 0) {
-    uint8_t size = item.size();
-    write_wrapper<size_type>(writer_, (char *)&size);
+    static_assert((serialize_conf::kArrayLengthField > 0) &&
+                      (serialize_conf::kArrayLengthField == 1 ||
+                       serialize_conf::kArrayLengthField == 2 ||
+                       serialize_conf::kArrayLengthField == 4 ||
+                       serialize_conf::kArrayLengthField == 8),
+                  "");
+    auto size = item.size();
+    write_wrapper<serialize_conf::kArrayLengthField>(writer_, (char *)&size);
     for (const auto &i : item) {
-      serialize_one<size_type>(i);
+      serialize_one(i);
     }
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<id == type_id::pair_t, int> = 0) {
-    serialize_one<size_type>(item.first);
-    serialize_one<size_type>(item.second);
+    serialize_one(item.first);
+    serialize_one(item.second);
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<id == type_id::optional_t, int> = 0) {
     bool has_value = item.has_value();
     write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
     if (has_value) {
-      serialize_one<size_type>(*item);
+      serialize_one(*item);
     }
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<id == type_id::expected_t, int> = 0) {
     bool has_value = item.has_value();
     write_wrapper<sizeof(bool)>(writer_, (char *)&has_value);
     if (has_value) {
-      serialize_one<size_type>(item.value());
+      serialize_one(item.value());
     } else {
-      serialize_one<size_type>(item.error());
+      serialize_one(item.error());
     }
   }
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &, std::enable_if_t<id == type_id::monostate_t, int> = 0) {
     static_assert(std::is_same<typename T::value_type, void>::value,
@@ -155,7 +183,7 @@ class Serializer {
     return;
   }
 
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &,
       std::enable_if_t<id == type_id::struct_t && !user_defined_refl<T>, int> =
@@ -166,7 +194,7 @@ class Serializer {
     // do nothing
     return;
   }
-  // template <std::size_t size_type, type_id id, typename T>
+  // template <type_id id, typename T>
   // constexpr void inline serialize_one_helper(
   //     const T &item,
   //     std::enable_if_t<(id == type_id::struct_t) &&
@@ -177,58 +205,45 @@ class Serializer {
   //   std::cout << sizeof(T) << " --- " << std::endl;
   //   write_wrapper<sizeof(T)>(writer_, (char *)&item);
   // }
-  // template <std::size_t size_type, type_id id, typename T>
+  // template <type_id id, typename T>
   // constexpr void inline serialize_one_helper(
   //     const T &item, std::enable_if_t<(id == type_id::struct_t), int> = 0) {
   //   // TODO padding
   //   visit_members(item, [this](auto &&...items) {
   //     static_cast<void>(
-  //         std::initializer_list<int>{(serialize_one<size_type>(items),
+  //         std::initializer_list<int>{(serialize_one(items),
   //         0)...});
   //   });
   // }
-  template <std::size_t size_type, type_id id, typename T>
+  template <type_id id, typename T>
   constexpr void inline serialize_one_helper(
       const T &item, std::enable_if_t<(id == type_id::struct_t), int> = 0) {
-    visit_members(
-        item, [this](auto &&...items) { serialize_many<size_type>(items...); });
+    if (serialize_conf::kStructLengthField != 0) {
+      auto size = calculate_payload_size<serialize_conf>(item);
+      write_wrapper<serialize_conf::kStructLengthField>(writer_, (char *)&size);
+    }
+    visit_members(item, [this](auto &&...items) { serialize_many(items...); });
   }
 
-  template <std::size_t size_type, typename T>
+  template <typename T>
   constexpr void inline serialize_one(const T &item) {
     using type = remove_cvref_t<decltype(item)>;
     static_assert(!std::is_pointer<type>::value, "");
     constexpr auto id = get_type_id<type>();
-    serialize_one_helper<size_type, id, type>(item);
+    serialize_one_helper<id, type>(item);
   }
 
+ private:
   writer &writer_;
-  const serialize_buffer_size &info_;
+  const std::size_t &info_;
 };
 
-template <uint64_t conf = ser_config::DEFAULT, typename Writer,
-          typename... Args>
-void serialize_to(Writer &writer, const serialize_buffer_size &info,
+template <typename conf, typename Writer, typename... Args>
+void serialize_to(Writer &writer, const std::size_t &info,
                   const Args &...args) {
-  static_assert(sizeof...(args) > 0, "");
-  detail::Serializer<Writer, detail::get_args_type<Args...>> o(writer, info);
-  switch ((info.metainfo() & 0b11000) >> 3) {
-    case 0:
-      o.template serialize<1>(args...);
-      break;
-    case 1:
-      o.template serialize<2>(args...);
-      break;
-    case 2:
-      o.template serialize<4>(args...);
-      break;
-    case 3:
-      o.template serialize<8>(args...);
-      break;
-    default:
-      detail::unreachable();
-      break;
-  };
+  static_assert(writer_t<Writer>, "The writer type must satisfy requirements!");
+  detail::Serializer<Writer, conf> o(writer, info);
+  o.template serialize(args...);
 }
 
 }  // namespace detail
