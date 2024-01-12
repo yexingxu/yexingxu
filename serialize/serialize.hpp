@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-07 14:53:03
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 20:21:20
+ * @LastEditTime: 2024-01-05 20:58:13
  */
 
 #pragma once
@@ -49,7 +49,6 @@ template <typename conf = serialize_props_default, typename Writer,
           std::enable_if_t<detail::serialize_buffer<Writer>, int> = 0>
 void serialize_to(Writer &writer, const Args &...args) {
   static_assert(sizeof...(args) > 0, "");
-
   auto data_offset = writer.size();
   auto info = detail::get_serialize_runtime_info<conf>(args...);
   auto total = data_offset + info;

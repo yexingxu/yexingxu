@@ -13,10 +13,6 @@ include(CheckAndAddFiles)
 
 # find_package(Threads REQUIRED)
 find_package(GTest REQUIRED)
-# if(NOT GTest_FOUND)
-#   message(STATUS "There is no GTest in sysroot ${CMAKE_SYSROOT}")
-#   add_subdirectory(../thirdpart/googletest)
-# endif()
 
 include_directories(${GTEST_INCLUDE_DIRS})
 
@@ -31,6 +27,7 @@ check_and_add_files(TEMPLATE_TEST_SOURCES
   endian_test.cc
   serializer_test.cc
   deserializer_test.cc
+  # alignment_test.cc
 )
 add_executable(serialize-test ${TEST_SOURCES} ${TEMPLATE_TEST_SOURCES})
 

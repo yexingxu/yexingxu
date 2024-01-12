@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 00:06:13
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 15:51:47
+ * @LastEditTime: 2024-01-06 06:29:50
  */
 
 #pragma once
@@ -20,10 +20,10 @@ enum ser_config {
 };
 
 enum class alignment : std::uint8_t {
+  kAlignment1 = 1,
   kAlignment2 = 2,
   kAlignment4 = 4,
   kAlignment8 = 8,
-  kAlignment16 = 16,
 };
 
 enum class byte_order : std::uint8_t {

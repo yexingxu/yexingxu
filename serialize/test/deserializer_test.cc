@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 19:11:44
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 20:05:21
+ * @LastEditTime: 2024-01-06 05:55:32
  */
 
 #include <gtest/gtest.h>
@@ -196,4 +196,8 @@ TEST(SerializerTest, DeserializeTest) {
   } else {
     std::cout << "error: " << __LINE__ << std::endl;
   }
+  int ddd = 2;
+  double ccc = 9.0;
+
+  serialize::serialize<serialize_props>(ddd, ccc);
 }

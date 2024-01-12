@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2024-01-05 16:27:42
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 19:37:55
+ * @LastEditTime: 2024-01-06 07:19:49
  */
 
 #include <gtest/gtest.h>
@@ -43,7 +43,6 @@ struct serialize_props_big {
 
 TEST(SerializerTest, EndianTest) {
   using namespace serialize::detail;
-  std::cout << std::hex << '\n';
   std::vector<char> writer_little;
   uint32_t b = 0x12345678;
   writer_little.resize(sizeof(b));

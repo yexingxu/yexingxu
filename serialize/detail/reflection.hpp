@@ -4,13 +4,15 @@
  * @Author: chen, hua
  * @Date: 2023-12-27 20:32:47
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 20:20:46
+ * @LastEditTime: 2024-01-11 14:28:23
  */
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
+#include <iostream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -371,6 +373,24 @@ constexpr static bool is_trivial_view_v = false;
 template <typename Type>
 constexpr static bool is_trivial_view_v<trivial_view<Type>> = true;
 
+template <typename T, typename type = remove_cvref_t<T>,
+          std::enable_if_t<tuple_size<type>, int> = 0>
+constexpr std::size_t members_count() {
+  return std::tuple_size<type>::value;
+}
+template <typename T, typename type = remove_cvref_t<T>,
+          std::enable_if_t<!tuple_size<type> && user_defined_refl<T>, int> = 0>
+constexpr std::size_t members_count() {
+  return decltype(SERIALIZE_FIELD_COUNT(std::declval<type>()))::value;
+}
+
+template <typename T, typename type = remove_cvref_t<T>,
+          std::enable_if_t<!tuple_size<type> && !user_defined_refl<T>, int> = 0>
+constexpr std::size_t members_count() {
+  static_assert(!user_defined_refl<T>, "");
+  return 0;
+}
+
 // visit members
 constexpr static auto MaxVisitMembers = 64;
 
@@ -578,6 +598,22 @@ constexpr auto get_types() {
   });
 }
 
+template <typename T, template <typename, typename, std::size_t> class Op,
+          typename... Contexts, std::size_t... I>
+constexpr void for_each_impl(std::index_sequence<I...>, Contexts &...contexts) {
+  using type = decltype(get_types<T>());
+  static_cast<void>(std::initializer_list<int>{
+      (Op<T, std::tuple_element_t<I, type>, I>{}(contexts...), 0)...});
+}
+
+template <typename T, template <typename, typename, std::size_t> class Op,
+          typename... Contexts>
+constexpr void for_each(Contexts &...contexts) {
+  using type = decltype(get_types<T>());
+  for_each_impl<T, Op>(std::make_index_sequence<std::tuple_size<type>::value>(),
+                       contexts...);
+}
+
 template <typename Ty>
 struct is_trivial_serializable {
  private:
@@ -652,9 +688,12 @@ struct is_trivial_serializable {
   }
 
   // user defined struct
-  template <typename T = Ty, std::enable_if_t<user_struct<T>, int> = 0>
+  template <typename T = Ty,
+            std::enable_if_t<user_struct<T> && user_defined_refl<T>, int> = 0>
   static constexpr bool solve() {
-    return false;
+    using U = decltype(get_types<T>());
+    return class_visit_helper<U>(
+        std::make_index_sequence<std::tuple_size<U>::value>{});
   }
 
  public:

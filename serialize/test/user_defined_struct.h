@@ -4,8 +4,10 @@
  * @Author: chen, hua
  * @Date: 2024-01-04 19:23:33
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 15:51:57
+ * @LastEditTime: 2024-01-11 14:49:47
  */
+
+#include <cstdint>
 
 #include "detail/reflection.hpp"
 #include "ser_config.hpp"
@@ -58,3 +60,51 @@ struct person3 {
   }
 };
 SERIALIZE_REFL(person3, p1, p2);
+
+struct B {
+  std::uint8_t a;
+  std::uint16_t b;
+};
+SERIALIZE_REFL(B, a, b);
+
+struct A {
+  std::uint8_t a;
+  std::uint16_t b;
+  std::uint32_t c;
+  B bb;
+  std::uint64_t d;
+};
+
+SERIALIZE_REFL(A, a, b, c, bb, d);
+
+struct AA {
+  int aa;
+  std::string bb;
+  uint16_t cc;
+  std::string be;
+  uint32_t dd;
+  std::string fe;
+};
+SERIALIZE_REFL(AA, aa, bb, cc, be, dd, fe);
+
+namespace example {
+struct Test {
+  int a;
+  double b;
+  constexpr bool operator==(const Test& other) const {
+    return a == other.a && b == other.b;
+  }
+};
+SERIALIZE_REFL(Test, a, b);
+}  // namespace example
+
+namespace example1 {
+struct Test {
+  int a;
+  double b;
+  constexpr bool operator==(const Test& other) const {
+    return a == other.a && b == other.b;
+  }
+};
+SERIALIZE_REFL(Test, a, b);
+}  // namespace example1
