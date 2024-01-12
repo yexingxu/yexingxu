@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 12:21:29
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-11 14:37:37
+ * @LastEditTime: 2024-01-12 13:12:45
  */
 #pragma once
 
@@ -207,7 +207,13 @@ class Serializer {
     // do nothing
     return;
   }
-
+  template <type_id id, typename T>
+  constexpr void inline serialize_one_helper(
+      const T &item, std::enable_if_t<id == type_id::pointer_t, int> = 0) {
+    static_assert(!std::is_same<decltype(nullptr), decltype(item)>::value,
+                  "serialize nullptr is not allowed.");
+    serialize_one(*item);
+  }
   // template <type_id id, typename T>
   // constexpr void inline serialize_one_helper(
   //     const T &item, std::enable_if_t<(id == type_id::struct_t), int> = 0) {
@@ -274,7 +280,7 @@ class Serializer {
   template <typename T>
   constexpr void inline serialize_one(const T &item) {
     using type = remove_cvref_t<decltype(item)>;
-    static_assert(!std::is_pointer<type>::value, "");
+    // static_assert(!std::is_pointer<type>::value, "");
     constexpr auto id = get_type_id<type>();
     serialize_one_helper<id, type>(item);
   }

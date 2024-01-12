@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-27 20:32:47
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-11 14:28:23
+ * @LastEditTime: 2024-01-12 14:56:34
  */
 
 #pragma once
@@ -18,9 +18,9 @@
 #include <utility>
 #include <vector>
 
-#include "append_types/expected.hpp"
-#include "append_types/optional.hpp"
-#include "append_types/variant.hpp"
+#include "../append_types/expected.hpp"
+#include "../append_types/optional.hpp"
+#include "../append_types/variant.hpp"
 #include "for_each_macro.hpp"
 #include "trivial_view.hpp"
 #include "utils.hpp"
@@ -302,6 +302,16 @@ constexpr bool tuple = is_instantiation_of<std::tuple, T>::value;
 template <typename T>
 constexpr bool variant = is_instantiation_of<mpark::variant, T>::value;
 
+// pointer
+template <typename T>
+constexpr bool unique_ptr = is_instantiation_of<std::unique_ptr, T>::value;
+template <typename T>
+constexpr bool shared_ptr = is_instantiation_of<std::shared_ptr, T>::value;
+
+template <typename T>
+constexpr bool pointer =
+    std::is_pointer<T>::value || unique_ptr<T> || shared_ptr<T>;
+
 // array
 template <typename T, typename = void>
 struct array_impl : std::false_type {};
@@ -349,7 +359,7 @@ constexpr bool pair = pair_impl<T>::value;
 template <typename T>
 constexpr bool user_struct =
     !container<T> && !bitset<T> && !pair<T> && !tuple<T> && !array<T> &&
-    !variant<T> && std::is_class<T>::value;
+    !variant<T> && !pointer<T> && std::is_class<T>::value;
 
 template <typename T, typename = void>
 struct user_defined_refl_impl : std::false_type {};
@@ -678,6 +688,11 @@ struct is_trivial_serializable {
   static constexpr bool solve() {
     return is_trivial_serializable<typename T::first_type>::value &&
            is_trivial_serializable<typename T::second_type>::value;
+  }
+  // pointer
+  template <typename T = Ty, std::enable_if_t<pointer<T>, int> = 0>
+  static constexpr bool solve() {
+    return false;
   }
 
   // tuple
@@ -1249,12 +1264,12 @@ constexpr decltype(auto) inline template_switch(std::size_t index,
 // clang-format off
 
 #define SERIALIZE_RETURN_ELEMENT(Idx, Type, X) \
-template<std::size_t I, std::enable_if_t<I==Idx, int> = 0> \
-constexpr auto& FuncImpl(Type& c){return c.X;} \
+template<std::size_t In=I, std::enable_if_t<In==Idx, int> = 0> \
+constexpr auto& operator()(Type& c){return c.X;} \
 
 #define SERIALIZE_RETURN_ELEMENT_CONST(Idx, Type, X) \
-template<std::size_t I, std::enable_if_t<I==Idx, int> = 0> \
-constexpr const auto& FuncImpl(const Type& c){return c.X;} \
+template<std::size_t In=I, std::enable_if_t<In==Idx, int> = 0> \
+constexpr const auto& operator()(const Type& c){return c.X;} \
 
 #define SERIALIZE_GET_INDEX(Idx, Type,X) \
 inline auto& SERIALIZE_GET_##Idx(Type& c) {\
@@ -1275,13 +1290,16 @@ constexpr std::size_t SERIALIZE_FIELD_COUNT_IMPL<Type>() {return SERIALIZE_ARG_C
 inline decltype(auto) SERIALIZE_FIELD_COUNT(const Type &){ \
   return std::integral_constant<std::size_t,SERIALIZE_ARG_COUNT(__VA_ARGS__)>{}; \
 } \
+template <std::size_t I>\
+struct SERIALIZE_CONCAT(Type,RETURN_ELEMENT){ \
 SERIALIZE_EXPAND_EACH(,SERIALIZE_RETURN_ELEMENT, Type,__VA_ARGS__) \
 SERIALIZE_EXPAND_EACH(,SERIALIZE_RETURN_ELEMENT_CONST,Type, __VA_ARGS__) \
+};\
 template<std::size_t I, std::size_t Idx> auto& SERIALIZE_GET(Type& c) { \
-  return FuncImpl<I>(c);\
+  return SERIALIZE_CONCAT(Type,RETURN_ELEMENT)<I>()(c);\
 } \
 template<std::size_t I, std::size_t Idx> const auto& SERIALIZE_GET(const Type& c) { \
-  return FuncImpl<I>(c);\
+  return SERIALIZE_CONCAT(Type,RETURN_ELEMENT)<I>()(c);\
 } \
 SERIALIZE_EXPAND_EACH(,SERIALIZE_GET_INDEX,Type,__VA_ARGS__) \
 SERIALIZE_EXPAND_EACH(,SERIALIZE_GET_INDEX_CONST,Type,__VA_ARGS__) \
@@ -1290,6 +1308,7 @@ SERIALIZE_EXPAND_EACH(,SERIALIZE_GET_INDEX_CONST,Type,__VA_ARGS__) \
 template <std::size_t I> \
 friend auto& SERIALIZE_GET(Type& c); \
 template <std::size_t I> \
-friend const auto& SERIALIZE_GET(const Type& c);
-
+friend const auto& SERIALIZE_GET(const Type& c);\
+template <std::size_t I> \
+friend struct SERIALIZE_CONCAT(Type,RETURN_ELEMENT);
 

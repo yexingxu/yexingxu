@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 00:23:40
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 19:57:51
+ * @LastEditTime: 2024-01-12 12:50:32
  */
 
 #include "detail/calculate_size.hpp"
@@ -193,4 +193,9 @@ TEST(SerializerTest, CalculateSizeTest) {
   EXPECT_EQ(detail::get_serialize_runtime_info<serialize_props>(tuple_1), 12);
   mpark::variant<int, double> variant_1{1};
   EXPECT_EQ(detail::get_serialize_runtime_info<serialize_props>(variant_1), 5);
+
+  // pointer
+  int int_a = 1;
+  int* int_ptr = &int_a;
+  EXPECT_EQ(detail::calculate_payload_size<serialize_props>(int_ptr).total, 4);
 }

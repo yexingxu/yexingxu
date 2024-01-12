@@ -4,10 +4,11 @@
  * @Author: chen, hua
  * @Date: 2024-01-04 19:23:33
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-11 14:49:47
+ * @LastEditTime: 2024-01-12 14:51:47
  */
 
 #include <cstdint>
+#include <type_traits>
 
 #include "detail/reflection.hpp"
 #include "ser_config.hpp"
@@ -108,3 +109,60 @@ struct Test {
 };
 SERIALIZE_REFL(Test, a, b);
 }  // namespace example1
+
+struct base {
+  uint64_t ID;
+  virtual ~base(){};
+  virtual std::string hello() = 0;
+};
+struct obj1 : public base {
+  std::string name;
+  std::string hello() override { return "obj1"; }
+  constexpr bool operator==(const obj1& other) const {
+    return ID == other.ID && name == other.name;
+  }
+};
+
+SERIALIZE_REFL(obj1, ID, name);
+// // the declartion for derived relation for struct_pack
+// STRUCT_PACK_DERIVED_DECL(base, obj1);
+// // the implement for derived relation for struct_pack
+// STRUCT_PACK_DERIVED_IMPL(base, obj1);
+
+// class testclass {
+//  private:
+//   int a = 1;
+
+//  public:
+//   double b = 2.0;
+
+//   template <std::size_t I>
+//   friend struct FuncImpl;
+// };
+// // SERIALIZE_REFL(testclass,a, b);
+// // struct FuncImpl {
+// //   template <std::size_t I, typename = int>
+// //   constexpr auto& operator()(testclass& c);
+// // };
+
+// // template <std::size_t In, std::enable_if_t<In == 1, int> = 0>
+// // constexpr auto& FuncImpl::operator()(testclass& c) {
+// //   return c.a;
+// // }
+
+// // template <std::size_t In, std::enable_if_t<In == 0, int> = 0>
+// // constexpr auto& FuncImpl::operator()(testclass& c) {
+// //   return c.b;
+// // }
+
+// template <std::size_t In>
+// struct FuncImpl {
+//   template <std::size_t I = In, std::enable_if_t<I == 1, int> = 0>
+//   constexpr auto& operator()(testclass& c) {
+//     return c.a;
+//   }
+//   template <std::size_t I = In, std::enable_if_t<I == 0, int> = 0>
+//   constexpr auto& operator()(testclass& c) {
+//     return c.b;
+//   }
+// };

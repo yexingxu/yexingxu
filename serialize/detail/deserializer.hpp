@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 16:11:16
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-11 14:36:52
+ * @LastEditTime: 2024-01-12 13:20:22
  */
 
 #pragma once
@@ -61,7 +61,9 @@ class Deserializer {
   template <typename T>
   constexpr serialize::return_code inline deserialize_one(T &item) {
     using type = remove_cvref_t<decltype(item)>;
-    static_assert(!std::is_pointer<type>::value, "");
+    static_assert(
+        !std::is_pointer<type>::value,
+        "deserializer is not support a raw pointer, use smart ptr replace.");
     constexpr auto id = get_type_id<type>();
     return deserialize_one_helper<id>(item);
   }
@@ -191,6 +193,27 @@ class Deserializer {
     return_code code{};
     tl::apply([&](auto &&...items) { code = deserialize_many(items...); },
               item);
+    return code;
+  }
+
+  template <type_id id, typename T>
+  constexpr serialize::return_code inline deserialize_one_helper(
+      T &item,
+      std::enable_if_t<id == type_id::pointer_t && unique_ptr<T>, int> = 0) {
+    return_code code{};
+    using type = remove_cvref_t<decltype(item)>;
+    item = std::make_unique<typename type::element_type>();
+    deserialize_one(*item);
+    return code;
+  }
+  template <type_id id, typename T>
+  constexpr serialize::return_code inline deserialize_one_helper(
+      T &item,
+      std::enable_if_t<id == type_id::pointer_t && shared_ptr<T>, int> = 0) {
+    return_code code{};
+    using type = remove_cvref_t<decltype(item)>;
+    item = std::make_shared<typename type::element_type>();
+    deserialize_one(*item);
     return code;
   }
 

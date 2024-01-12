@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-27 22:51:25
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-05 19:43:00
+ * @LastEditTime: 2024-01-12 12:01:36
  */
 #include "detail/type_id.hpp"
 
@@ -14,8 +14,10 @@
 #include <bitset>
 #include <list>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -121,4 +123,21 @@ TEST(SerializerTest, TypeIdTest) {
   using variant_t = mpark::variant<int, double, std::string>;
   EXPECT_EQ(serialize::detail::get_type_id<variant_t>(),
             serialize::detail::type_id::variant_t);
+
+  auto sptr = std::make_shared<int>(1);
+  auto uptr = std::make_unique<int>(1);
+  int aaaa = 3;
+  int* ptr = &aaaa;
+  // int& ref = aaaa;
+
+  // std::is_reference<decltype(ref)>::value;
+
+  EXPECT_EQ(serialize::detail::get_type_id<decltype(sptr)>(),
+            serialize::detail::type_id::pointer_t);
+  EXPECT_EQ(serialize::detail::get_type_id<decltype(uptr)>(),
+            serialize::detail::type_id::pointer_t);
+  EXPECT_EQ(serialize::detail::get_type_id<decltype(ptr)>(),
+            serialize::detail::type_id::pointer_t);
+  // EXPECT_EQ(serialize::detail::get_type_id<decltype(ref)>(),
+  //           serialize::detail::type_id::pointer_t);
 }

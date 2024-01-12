@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2024-01-05 04:05:37
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-11 14:49:13
+ * @LastEditTime: 2024-01-12 14:52:02
  */
 
 #include <gtest/gtest.h>
@@ -67,4 +67,10 @@ TEST(SerializerTest, SerializeTest) {
   if (res1.has_value()) {
     EXPECT_EQ(res1.value(), t1);
   }
+
+  // testclass tc;
+  // auto tt1 = FuncImpl<1>()(tc);
+  // auto tt0 = FuncImpl<0>()(tc);
+  // EXPECT_EQ(1, tt1);
+  // EXPECT_EQ(2.0, tt0);
 }

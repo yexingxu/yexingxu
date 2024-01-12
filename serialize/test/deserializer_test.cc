@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 19:11:44
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-06 05:55:32
+ * @LastEditTime: 2024-01-12 13:21:02
  */
 
 #include <gtest/gtest.h>
@@ -200,4 +200,33 @@ TEST(SerializerTest, DeserializeTest) {
   double ccc = 9.0;
 
   serialize::serialize<serialize_props>(ddd, ccc);
+
+  obj1 o;
+  o.ID = 1;
+  o.name = "a";
+  auto bufferr1e1 = serialize::serialize(o);
+  auto resw1 = serialize::deserialize<obj1>(bufferr1e1);
+  if (resw1.has_value()) {
+    EXPECT_EQ(resw1.value(), o);
+  } else {
+    EXPECT_EQ(resw1.value(), o);
+  }
+
+  auto* o_pointer = &o;
+  auto buffer_o_ptr = serialize::serialize(o_pointer);
+  auto o_uptr = std::make_unique<obj1>();
+  auto res_o_uptr = serialize::deserialize<decltype(o_uptr)>(buffer_o_ptr);
+  if (res_o_uptr.has_value()) {
+    EXPECT_EQ(*(res_o_uptr.value()), *o_pointer);
+  } else {
+    std::cout << "error" << std::endl;
+  }
+
+  auto o_sptr = std::make_shared<obj1>();
+  auto res_o_sptr = serialize::deserialize<decltype(o_sptr)>(buffer_o_ptr);
+  if (res_o_sptr.has_value()) {
+    EXPECT_EQ(*(res_o_sptr.value()), *o_pointer);
+  } else {
+    std::cout << "error" << std::endl;
+  }
 }

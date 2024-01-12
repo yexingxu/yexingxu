@@ -54,7 +54,8 @@ enum class type_id {
   variant_t,
   expected_t,
   bitset_t,
-  polymorphic_unique_ptr_t,
+  pointer_t,
+  polymorphic_pointer_t,
   // monostate, or void
   monostate_t = 250,
   // circle_flag
@@ -335,6 +336,12 @@ template <typename T, std::enable_if_t<user_struct<T>, int> = 0>
 constexpr type_id get_type_id() {
   static_assert(CHAR_BIT == 8, "");
   return type_id::struct_t;
+}
+
+template <typename T, std::enable_if_t<pointer<T>, int> = 0>
+constexpr type_id get_type_id() {
+  static_assert(CHAR_BIT == 8, "");
+  return type_id::pointer_t;
 }
 
 template <typename T, std::enable_if_t<tuple<T>, int> = 0>

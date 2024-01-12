@@ -4,7 +4,7 @@
  * @Author: chen, hua
  * @Date: 2023-12-28 00:08:33
  * @LastEditors: chen, hua
- * @LastEditTime: 2024-01-11 14:36:22
+ * @LastEditTime: 2024-01-12 12:49:01
  */
 #pragma once
 
@@ -157,6 +157,16 @@ struct calculate_one_size {
     visit_members(item, [&](auto &&...items) {
       ret += calculate_payload_size<conf>(items...);
     });
+    return ret;
+  }
+
+  // struct
+  template <typename T, typename type = remove_cvref_t<T>,
+            type_id id = get_type_id<remove_cvref_t<T>>(),
+            std::enable_if_t<id == type_id::pointer_t, int> = 0>
+  constexpr size_info inline operator()(const T &item) {
+    size_info ret{};
+    ret += calculate_one_size<conf>()(*item);
     return ret;
   }
 };
