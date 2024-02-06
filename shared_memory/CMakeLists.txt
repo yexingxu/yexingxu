@@ -22,18 +22,41 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 
 check_and_add_files(SHM_SOURCES
- "src/details/"
+ "src/shm/"
   shared_memory.cc
   memory_map.cc
   utils.cc
   signal_handle.cc
+  shared_memory_object.cc
+  algorithm.cc
+  file_management_interface.cc
+  user.cc
+  group.cc
+  file_access.cc
+  memory_provider.cc
+  shared_memory_provider.cc
+  memory_manager_master.cc
+  memory_block.cc
+  memory.cc
 )
 
 check_and_add_files(SHM_SOURCES
- "src/"
-  shared_memory_object.cc
-
+ "src/memory/"
+  chunk_setting.cc
+  chunk_header.cc
+  bump_allocator.cc
+  loffli.cc
+  memory_pool.cc
+  memory_manager.cc
+  shared_chunk.cc
+  config.cc
 )
+
+check_and_add_files(SHM_SOURCES
+ "src/types/"
+  unique_port_id.cc
+)
+
 add_library(shm SHARED ${SHM_SOURCES})
 
 set_target_properties(shm
@@ -52,8 +75,8 @@ target_compile_options(shm
 )
 
 target_include_directories(shm
- PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(shm
@@ -64,6 +87,8 @@ target_link_libraries(shm
     rt
     # Threads::Threades
 )
+
+add_subdirectory(test)
 
 #install
 install(TARGETS shm RUNTIME DESTINATION shm/bin)
