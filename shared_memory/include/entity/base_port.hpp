@@ -62,8 +62,9 @@ class BasePort {
   bool toBeDestroyed() const noexcept;
 
  protected:
-  const MemberType_t* getMembers() const noexcept;
-  MemberType_t* getMembers() noexcept;
+  const MemberType_t* getMembers() const noexcept { return m_basePortDataPtr; }
+
+  MemberType_t* getMembers() noexcept { return m_basePortDataPtr; }
 
  private:
   MemberType_t* m_basePortDataPtr;

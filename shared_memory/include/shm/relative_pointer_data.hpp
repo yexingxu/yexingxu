@@ -17,7 +17,12 @@ class RelativePointerData {
   /// @brief constructs a RelativePointerData from a given offset and segment id
   /// @param[in] id is the unique id of the segment
   /// @param[in] offset is the offset within the segment
-  constexpr RelativePointerData(identifier_t id, offset_t offset) noexcept;
+  constexpr RelativePointerData(identifier_t id, offset_t offset) noexcept
+      : m_idAndOffset(static_cast<uint64_t>(id) | (offset << ID_BIT_SIZE)) {
+    if ((id > MAX_VALID_ID) || (offset > MAX_VALID_OFFSET)) {
+      m_idAndOffset = LOGICAL_NULLPTR;
+    }
+  }
 
   /// @brief Getter for the id which identifies the segment
   /// @return the id which identifies the segment

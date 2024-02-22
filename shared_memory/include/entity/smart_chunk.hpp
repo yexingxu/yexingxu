@@ -1,8 +1,11 @@
 #pragma once
 
+#include <functional>
+#include <iostream>
 #include <memory>
 
 #include "memory/chunk_header.hpp"
+#include "plog/Log.h"
 #include "types/optional.hpp"
 #include "utils/type_traits.hpp"
 
@@ -13,8 +16,11 @@ namespace internal {
 /// @brief helper struct for smartChunk
 template <typename TransmissionInterface, typename T, typename H>
 struct SmartChunkPrivateData {
-  SmartChunkPrivateData(std::unique_ptr<T>&& smartChunkUniquePtr,
-                        TransmissionInterface& producer) noexcept;
+  using DeleteFunction = std::function<void(T*)>;
+
+  SmartChunkPrivateData(
+      std::unique_ptr<T, DeleteFunction>&& smartChunkUniquePtr,
+      TransmissionInterface& producer) noexcept;
 
   SmartChunkPrivateData(SmartChunkPrivateData&& rhs) noexcept = default;
   SmartChunkPrivateData& operator=(SmartChunkPrivateData&& rhs) noexcept =
@@ -24,15 +30,17 @@ struct SmartChunkPrivateData {
   SmartChunkPrivateData& operator=(const SmartChunkPrivateData&) = delete;
   ~SmartChunkPrivateData() = default;
 
-  tl::optional<std::unique_ptr<T>> smartChunkUniquePtr;
+  tl::optional<std::unique_ptr<T, DeleteFunction>> smartChunkUniquePtr;
   std::reference_wrapper<TransmissionInterface> producerRef;
 };
 
 /// @brief specialization of helper struct for smartChunk for const T
 template <typename TransmissionInterface, typename T, typename H>
 struct SmartChunkPrivateData<TransmissionInterface, const T, H> {
+  using DeleteFunction = std::function<void(T*)>;
+
   explicit SmartChunkPrivateData(
-      std::unique_ptr<const T>&& smartChunkUniquePtr) noexcept;
+      std::unique_ptr<const T, DeleteFunction>&& smartChunkUniquePtr) noexcept;
 
   SmartChunkPrivateData(SmartChunkPrivateData&& rhs) noexcept = default;
   SmartChunkPrivateData& operator=(SmartChunkPrivateData&& rhs) noexcept =
@@ -42,13 +50,15 @@ struct SmartChunkPrivateData<TransmissionInterface, const T, H> {
   SmartChunkPrivateData& operator=(const SmartChunkPrivateData&) = delete;
   ~SmartChunkPrivateData() = default;
 
-  tl::optional<std::unique_ptr<const T>> smartChunkUniquePtr;
+  tl::optional<std::unique_ptr<const T, DeleteFunction>> smartChunkUniquePtr;
 };
 }  // namespace internal
 
 template <typename TransmissionInterface, typename T,
           typename H = add_const_conditionally_t<memory::NoUserHeader, T>>
 class SmartChunk {
+  using DeleteFunction = std::function<void(T*)>;
+
  protected:
   static_assert(
       std::is_const<T>::value == std::is_const<H>::value,
@@ -87,7 +97,7 @@ class SmartChunk {
   /// @param producer is a reference to the producer to be able to use producer
   /// specific methods
   template <typename S = T, typename = ForProducerOnly<S, T>>
-  SmartChunk(std::unique_ptr<T>&& smartChunkUniquePtr,
+  SmartChunk(std::unique_ptr<T, DeleteFunction>&& smartChunkUniquePtr,
              TransmissionInterface& producer) noexcept;
 
   /// @brief Constructor for a SmartChunk used by the Consumer
@@ -97,7 +107,8 @@ class SmartChunk {
   /// the data of the encapsulated type
   /// T
   template <typename S = T, typename = ForConsumerOnly<S, T>>
-  explicit SmartChunk(std::unique_ptr<T>&& smartChunkUniquePtr) noexcept;
+  explicit SmartChunk(
+      std::unique_ptr<T, DeleteFunction>&& smartChunkUniquePtr) noexcept;
 
   ~SmartChunk() noexcept = default;
 
@@ -188,6 +199,117 @@ class SmartChunk {
  protected:
   internal::SmartChunkPrivateData<TransmissionInterface, T, H> m_members;
 };
+
+namespace internal {
+template <typename TransmissionInterface, typename T, typename H>
+inline SmartChunkPrivateData<TransmissionInterface, T, H>::
+    SmartChunkPrivateData(
+        std::unique_ptr<T, DeleteFunction>&& smartChunkUniquePtr,
+        TransmissionInterface& producer) noexcept
+    : smartChunkUniquePtr(std::move(smartChunkUniquePtr)),
+      producerRef(producer) {}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline SmartChunkPrivateData<TransmissionInterface, const T, H>::
+    SmartChunkPrivateData(
+        std::unique_ptr<const T, DeleteFunction>&& smartChunkUniquePtr) noexcept
+    : smartChunkUniquePtr(std::move(smartChunkUniquePtr)) {}
+}  // namespace internal
+
+template <typename TransmissionInterface, typename T, typename H>
+template <typename S, typename>
+inline SmartChunk<TransmissionInterface, T, H>::SmartChunk(
+    std::unique_ptr<T, DeleteFunction>&& smartChunkUniquePtr,
+    TransmissionInterface& producer) noexcept
+    : m_members({std::move(smartChunkUniquePtr), producer}) {
+  std::cout << __LINE__ << std::endl;
+  LOG_DEBUG() << __LINE__;
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+template <typename S, typename>
+inline SmartChunk<TransmissionInterface, T, H>::SmartChunk(
+    std::unique_ptr<T, DeleteFunction>&& smartChunkUniquePtr) noexcept
+    : m_members(std::move(smartChunkUniquePtr)) {}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline T* SmartChunk<TransmissionInterface, T, H>::operator->() noexcept {
+  return get();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline const T* SmartChunk<TransmissionInterface, T, H>::operator->()
+    const noexcept {
+  return get();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline T& SmartChunk<TransmissionInterface, T, H>::operator*() noexcept {
+  return *get();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline const T& SmartChunk<TransmissionInterface, T, H>::operator*()
+    const noexcept {
+  return *get();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline SmartChunk<TransmissionInterface, T, H>::operator bool() const noexcept {
+  return m_members.smartChunkUniquePtr.operator bool();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline T* SmartChunk<TransmissionInterface, T, H>::get() noexcept {
+  return m_members.smartChunkUniquePtr->get();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline const T* SmartChunk<TransmissionInterface, T, H>::get() const noexcept {
+  return m_members.smartChunkUniquePtr->get();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline add_const_conditionally_t<memory::ChunkHeader, T>*
+SmartChunk<TransmissionInterface, T, H>::getChunkHeader() noexcept {
+  return memory::ChunkHeader::fromUserPayload(
+      m_members.smartChunkUniquePtr->get());
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline const memory::ChunkHeader*
+SmartChunk<TransmissionInterface, T, H>::getChunkHeader() const noexcept {
+  return memory::ChunkHeader::fromUserPayload(
+      m_members.smartChunkUniquePtr->get());
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+template <typename R, typename>
+inline add_const_conditionally_t<R, T>&
+SmartChunk<TransmissionInterface, T, H>::getUserHeader() noexcept {
+  return *static_cast<R*>(
+      memory::ChunkHeader::fromUserPayload(m_members.smartChunkUniquePtr->get())
+          ->userHeader());
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+template <typename R, typename>
+inline const R& SmartChunk<TransmissionInterface, T, H>::getUserHeader()
+    const noexcept {
+  return const_cast<SmartChunk<TransmissionInterface, T, H>*>(this)
+      ->getUserHeader();
+}
+
+template <typename TransmissionInterface, typename T, typename H>
+inline T* SmartChunk<TransmissionInterface, T, H>::release() noexcept {
+  //   auto ptr =
+  //       std::unique_ptr<T>::release(std::move(*m_members.smartChunkUniquePtr));
+  //   m_members.smartChunkUniquePtr.reset();
+  if ((*m_members.smartChunkUniquePtr)) {
+    return (*m_members.smartChunkUniquePtr).release();
+  }
+  return nullptr;
+}
 
 }  // namespace entity
 }  // namespace shm

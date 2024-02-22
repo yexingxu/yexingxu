@@ -66,5 +66,118 @@ class UsedChunkList {
   DataElement_t m_listData[Capacity];
 };
 
+template <uint32_t Capacity>
+constexpr typename UsedChunkList<Capacity>::DataElement_t
+    UsedChunkList<Capacity>::DATA_ELEMENT_LOGICAL_NULLPTR;
+
+template <uint32_t Capacity>
+UsedChunkList<Capacity>::UsedChunkList() noexcept {
+  static_assert(sizeof(DataElement_t) <= 8U,
+                "The size of the data element type must not exceed 64 bit!");
+  static_assert(std::is_trivially_copyable<DataElement_t>::value,
+                "The data element type must be trivially copyable!");
+
+  init();
+}
+
+template <uint32_t Capacity>
+bool UsedChunkList<Capacity>::insert(memory::SharedChunk chunk) noexcept {
+  auto hasFreeSpace = m_freeListHead != INVALID_INDEX;
+  if (hasFreeSpace) {
+    // get next free entry after freelistHead
+    auto nextFree = m_listIndices[m_freeListHead];
+
+    // freeListHead is getting new usedListHead, next of this entry is updated
+    // to next in usedList
+    m_listIndices[m_freeListHead] = m_usedListHead;
+    m_usedListHead = m_freeListHead;
+
+    m_listData[m_usedListHead] = DataElement_t(chunk);
+
+    // set freeListHead to the next free entry
+    m_freeListHead = nextFree;
+
+    /// @todo iox-#623 can we do this cheaper with a global fence in cleanup?
+    m_synchronizer.clear(std::memory_order_release);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+template <uint32_t Capacity>
+bool UsedChunkList<Capacity>::remove(const memory::ChunkHeader* chunkHeader,
+                                     memory::SharedChunk& chunk) noexcept {
+  auto previous = INVALID_INDEX;
+
+  // go through usedList with stored chunks
+  for (auto current = m_usedListHead; current != INVALID_INDEX;
+       current = m_listIndices[current]) {
+    if (!m_listData[current].isLogicalNullptr()) {
+      // does the entry match the one we want to remove?
+      if (m_listData[current].getChunkHeader() == chunkHeader) {
+        chunk = m_listData[current].releaseToSharedChunk();
+
+        // remove index from used list
+        if (current == m_usedListHead) {
+          m_usedListHead = m_listIndices[current];
+        } else {
+          m_listIndices[previous] = m_listIndices[current];
+        }
+
+        // insert index to free list
+        m_listIndices[current] = m_freeListHead;
+        m_freeListHead = current;
+
+        /// @todo iox-#623 can we do this cheaper with a global fence in
+        /// cleanup?
+        m_synchronizer.clear(std::memory_order_release);
+        return true;
+      }
+    }
+    previous = current;
+  }
+  return false;
+}
+
+template <uint32_t Capacity>
+void UsedChunkList<Capacity>::cleanup() noexcept {
+  m_synchronizer.test_and_set(std::memory_order_acquire);
+
+  for (auto& data : m_listData) {
+    if (!data.isLogicalNullptr()) {
+      // release ownership by creating a SharedChunk
+      data.releaseToSharedChunk();
+    }
+  }
+
+  init();  // just to save us from the future self
+}
+
+template <uint32_t Capacity>
+void UsedChunkList<Capacity>::init() noexcept {
+  // build list
+  for (uint32_t i = 0U; i < Capacity; ++i) {
+    m_listIndices[i] = i + 1u;
+  }
+
+  if (Capacity > 0U) {
+    m_listIndices[Capacity - 1U] =
+        INVALID_INDEX;  // just to save us from the future self
+  } else {
+    m_listIndices[0U] = INVALID_INDEX;
+  }
+
+  m_usedListHead = INVALID_INDEX;
+  m_freeListHead = 0U;
+
+  // clear data
+  for (auto& data : m_listData) {
+    data.releaseToSharedChunk();
+  }
+
+  m_synchronizer.clear(std::memory_order_release);
+}
+
 }  // namespace entity
 }  // namespace shm

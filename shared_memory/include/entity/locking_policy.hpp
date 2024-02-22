@@ -1,7 +1,6 @@
 #pragma once
 
-#include <mutex>
-
+#include "entity/mutex.hpp"
 #include "types/optional.hpp"
 
 namespace shm {
@@ -17,7 +16,7 @@ class ThreadSafePolicy {
   bool tryLock() const noexcept;
 
  private:
-  mutable tl::optional<std::mutex> m_mutex;
+  mutable tl::optional<mutex> m_mutex;
 };
 
 class SingleThreadedPolicy {

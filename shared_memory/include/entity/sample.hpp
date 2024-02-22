@@ -1,5 +1,7 @@
 #pragma once
 
+#include <spdlog/spdlog.h>
+
 #include "entity/smart_chunk.hpp"
 
 namespace shm {
@@ -52,6 +54,18 @@ class Sample : public SmartChunk<PublisherInterface<T, H>, T, H> {
 
   using BaseType::m_members;
 };
+
+template <typename T, typename H>
+template <typename S, typename>
+void Sample<T, H>::publish() noexcept {
+  if (BaseType::m_members.smartChunkUniquePtr) {
+    BaseType::m_members.producerRef.get().publish(std::move(*(this)));
+  } else {
+    spdlog::error(
+        "Tried to publish empty Sample! Might be an already published or "
+        "moved Sample!");
+  }
+}
 
 }  // namespace entity
 }  // namespace shm

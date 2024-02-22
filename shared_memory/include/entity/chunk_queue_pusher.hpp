@@ -1,5 +1,6 @@
 #pragma once
 
+#include "entity/condition_notifier.hpp"
 #include "memory/shared_chunk.hpp"
 #include "shm/algorithm.hpp"
 
@@ -42,6 +43,53 @@ class ChunkQueuePusher {
  private:
   MemberType_t* m_chunkQueueDataPtr{nullptr};
 };
+
+template <typename ChunkQueueDataType>
+inline ChunkQueuePusher<ChunkQueueDataType>::ChunkQueuePusher(
+    details::not_null<MemberType_t* const> chunkQueueDataPtr) noexcept
+    : m_chunkQueueDataPtr(chunkQueueDataPtr) {}
+
+template <typename ChunkQueueDataType>
+inline const typename ChunkQueuePusher<ChunkQueueDataType>::MemberType_t*
+ChunkQueuePusher<ChunkQueueDataType>::getMembers() const noexcept {
+  return m_chunkQueueDataPtr;
+}
+
+template <typename ChunkQueueDataType>
+inline typename ChunkQueuePusher<ChunkQueueDataType>::MemberType_t*
+ChunkQueuePusher<ChunkQueueDataType>::getMembers() noexcept {
+  return m_chunkQueueDataPtr;
+}
+
+template <typename ChunkQueueDataType>
+inline bool ChunkQueuePusher<ChunkQueueDataType>::push(
+    memory::SharedChunk chunk) noexcept {
+  auto pushRet = getMembers()->m_queue.push(chunk);
+  bool hasQueueOverflow = false;
+
+  // drop the chunk if one is returned by an overflow
+  if (pushRet.has_value()) {
+    pushRet.value().releaseToSharedChunk();
+    // tell the ChunkDistributor that we had an overflow and dropped a sample
+    hasQueueOverflow = true;
+  }
+
+  {
+    typename MemberType_t::LockGuard_t lock(*getMembers());
+    if (getMembers()->m_conditionVariableDataPtr) {
+      ConditionNotifier(*getMembers()->m_conditionVariableDataPtr.get(),
+                        *getMembers()->m_conditionVariableNotificationIndex)
+          .notify();
+    }
+  }
+
+  return !hasQueueOverflow;
+}
+
+template <typename ChunkQueueDataType>
+inline void ChunkQueuePusher<ChunkQueueDataType>::lostAChunk() noexcept {
+  getMembers()->m_queueHasLostChunks.store(true, std::memory_order_relaxed);
+}
 
 }  // namespace entity
 }  // namespace shm

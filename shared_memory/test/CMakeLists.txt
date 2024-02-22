@@ -24,7 +24,8 @@ check_and_add_files(TEST_SOURCES
   # test_bump_allocator.cc
   # test_memory_pool.cc
   # test_memory_manager.cc
-  test_semgent.cc
+  # test_semgent.cc
+  test_publisher.cc
 )
 
 add_executable(shm-test ${TEST_SOURCES})

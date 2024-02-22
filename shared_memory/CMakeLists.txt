@@ -38,6 +38,7 @@ check_and_add_files(SHM_SOURCES
   memory_manager_master.cc
   memory_block.cc
   memory.cc
+  relative_pointer_data.cc
 )
 
 check_and_add_files(SHM_SOURCES
@@ -50,6 +51,22 @@ check_and_add_files(SHM_SOURCES
   memory_manager.cc
   shared_chunk.cc
   config.cc
+)
+
+check_and_add_files(SHM_SOURCES
+ "src/entity/"
+  publisher_port_user.cc
+  base_port.cc
+  shm_safe_unmanaged_chunk.cc
+  condition_notifier.cc
+  mutex.cc
+  locking_policy.cc
+)
+
+check_and_add_files(SHM_SOURCES
+ "src/sem/"
+  semaphore_interface.cc
+  unnamed_semaphore.cc
 )
 
 check_and_add_files(SHM_SOURCES

@@ -9,6 +9,8 @@
 namespace shm {
 namespace details {
 
+#define SEM_VALUE_MAX (2147483647)
+
 enum class SemaphoreError {
   INVALID_NAME,
   INVALID_SEMAPHORE_HANDLE,
