@@ -1312,3 +1312,13 @@ friend const auto& SERIALIZE_GET(const Type& c);\
 template <std::size_t I> \
 friend struct SERIALIZE_CONCAT(Type,RETURN_ELEMENT);
 
+struct person1 {
+  int age;
+  double weight;
+  int add;
+
+  constexpr bool operator==(const person1& other) const {
+    return age == other.age && weight == other.weight && add == other.add;
+  }
+};
+SERIALIZE_REFL(person1, age, weight, add);
